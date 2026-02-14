@@ -18,7 +18,9 @@ ScreenShotNet captures scripted rectangular screenshots. MIT licensed.
 
 ## Usage
 
-```ps
+This is intended as a barebones CLI tool that can be called by AI to create a partial screenshot either to clipboard or file. Obviously this is not a replacement for fully featured UI tools like the awesome [Greenshot](https://github.com/greenshot/greenshot) (also open source).
+
+```text
 ScreenShotNet --region <x,y,width,height> [--delay <seconds>] [--clipboard] [--file <path>] [--format <png|jpg|bmp|gif|tiff>] [--watermark-text <text> --watermark-pos <x,y> --watermark-size <size> --watermark-color <color>]
 ```
 
