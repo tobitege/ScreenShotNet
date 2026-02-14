@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ScreenShotNet.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ScreenShotNet.Tests/ScreenShotNet.Tests.csproj" />
+  </Folder>
+</Solution>

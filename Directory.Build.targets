@@ -1,0 +1,6 @@
+<Project>
+  <Target Name="ValidateProjectReferencesExist" BeforeTargets="ResolveProjectReferences">
+    <Error Text="Project reference '%(ProjectReference.Identity)' was not found."
+           Condition="'@(ProjectReference)' != '' and !Exists('%(ProjectReference.Identity)')" />
+  </Target>
+</Project>

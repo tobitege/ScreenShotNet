@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (example: 0.1.0, without v prefix)"
+        required: true
+        type: string
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      tag: ${{ steps.validate.outputs.tag }}
+    steps:
+      - name: Validate version format
+        id: validate
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format. Use semantic versioning (example: 0.1.0)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+  build_net48_zip:
+    needs: validate
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      zip_name: ${{ steps.package.outputs.zip_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build ScreenShotNet (net48, Release)
+        shell: pwsh
+        run: dotnet build .\src\ScreenShotNet.csproj -c Release -f net48
+
+      - name: Package net48 output as zip
+        id: package
+        shell: pwsh
+        run: |
+          $zipName = "ScreenShotNet-net48-v${{ needs.validate.outputs.version }}.zip"
+          $outputDir = "src/bin/Release/net48"
+          if (!(Test-Path "$outputDir/ScreenShotNet.exe")) {
+            throw "Build output not found at $outputDir"
+          }
+
+          Compress-Archive -Path "$outputDir/*" -DestinationPath $zipName -Force
+          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-zip
+          path: ${{ steps.package.outputs.zip_name }}
+          if-no-files-found: error
+
+  publish_release:
+    needs: [validate, build_net48_zip]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-zip
+          path: ./release-artifacts
+
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+
+          if [ ! -f CHANGELOG.md ]; then
+            echo "::error::CHANGELOG.md not found in repository root."
+            exit 1
+          fi
+
+          CHANGELOG_SECTION="$(awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" || $0 ~ "^## " ver "([[:space:]]|$)" || $0 ~ "^## v" ver "([[:space:]]|$)" {
+              capture=1
+            }
+            capture && /^## / && $0 !~ "^## \\[" ver "\\]" && $0 !~ "^## " ver "([[:space:]]|$)" && $0 !~ "^## v" ver "([[:space:]]|$)" {
+              exit
+            }
+            capture { print }
+          ' CHANGELOG.md)"
+
+          if [ -z "$CHANGELOG_SECTION" ]; then
+            echo "::error::No changelog entry found for version $VERSION in CHANGELOG.md."
+            exit 1
+          fi
+
+          {
+            echo 'body<<EOF'
+            echo "$CHANGELOG_SECTION"
+            echo ''
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: "v${{ needs.validate.outputs.version }}"
+          target_commitish: ${{ github.sha }}
+          files: ./release-artifacts/*.zip
+          body: ${{ steps.changelog.outputs.body }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Release Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Tag: ${{ needs.validate.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Asset: ${{ needs.build_net48_zip.outputs.zip_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag }}" >> $GITHUB_STEP_SUMMARY

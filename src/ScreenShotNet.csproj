@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <TargetFrameworks>$(CliTargetFrameworks)</TargetFrameworks>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ScreenShotNet</AssemblyName>
+    <RootNamespace>ScreenShotNet</RootNamespace>
+    <Version>0.1.0</Version>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>false</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Vanara.PInvoke.Gdi32" Version="5.0.0" />
+    <PackageReference Include="Vanara.PInvoke.User32" Version="5.0.0" />
+  </ItemGroup>
+</Project>

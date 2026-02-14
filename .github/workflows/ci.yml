@@ -1,0 +1,25 @@
+name: CI Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build net48 app and test project
+        shell: pwsh
+        run: ./scripts/build_desktop.ps1 -Configuration Release -IncludeTests
+
+      - name: Run net48 tests
+        shell: pwsh
+        run: dotnet vstest "tests/ScreenShotNet.Tests/bin/Release/net48/ScreenShotNet.Tests.dll"
