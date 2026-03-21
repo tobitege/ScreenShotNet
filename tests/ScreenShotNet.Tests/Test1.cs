@@ -7,12 +7,12 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace ScreenShotNet.Tests
 {
     [TestClass]
-    public class ProgramTests
+    public class CoreTests
     {
         [TestMethod]
         public void TryParseArguments_Help_ReturnsShowHelp()
         {
-            var success = Program.TryParseArguments(new[] { "--help" }, out var options, out var errorMessage, out var showHelp);
+            var success = CliArgumentParser.TryParseArguments(new[] { "--help" }, out var options, out var errorMessage, out var showHelp);
 
             Assert.IsTrue(success);
             Assert.IsTrue(showHelp);
@@ -23,7 +23,7 @@ namespace ScreenShotNet.Tests
         [TestMethod]
         public void TryParseArguments_ValidClipboardArguments_ParsesSuccessfully()
         {
-            var success = Program.TryParseArguments(new[] { "--region", "0,0,400,300", "--clipboard" }, out var options, out var errorMessage, out var showHelp);
+            var success = CliArgumentParser.TryParseArguments(new[] { "--region", "0,0,400,300", "--clipboard" }, out var options, out var errorMessage, out var showHelp);
 
             Assert.IsTrue(success);
             Assert.IsFalse(showHelp);
@@ -45,6 +45,7 @@ namespace ScreenShotNet.Tests
             {
                 "--region", "-10,20,640,480",
                 "--delay", "1.5",
+                "--window-title", "Visual Studio",
                 "--file", ".\\out\\capture",
                 "--watermark-text", "Draft",
                 "--watermark-pos", "12,24",
@@ -52,7 +53,7 @@ namespace ScreenShotNet.Tests
                 "--watermark-color", "#80FF0000"
             };
 
-            var success = Program.TryParseArguments(args, out var options, out var errorMessage, out var showHelp);
+            var success = CliArgumentParser.TryParseArguments(args, out var options, out var errorMessage, out var showHelp);
 
             Assert.IsTrue(success);
             Assert.IsFalse(showHelp);
@@ -62,6 +63,7 @@ namespace ScreenShotNet.Tests
             Assert.AreEqual(640, options.Region.Width);
             Assert.AreEqual(480, options.Region.Height);
             Assert.AreEqual(1.5d, options.DelaySeconds, 0.0001d);
+            Assert.AreEqual("Visual Studio", options.WindowTitle);
             Assert.IsFalse(options.CopyToClipboard);
             Assert.IsTrue(options.SaveToFile);
             Assert.AreEqual(".\\out\\capture", options.FilePath);
@@ -91,12 +93,14 @@ namespace ScreenShotNet.Tests
                 new[] { "--region", "10,10,200,200", "--clipboard", "--watermark-text", "Draft", "--watermark-pos", "10,20", "--watermark-color", "nope" },
                 new[] { "--region", "10,10,200,200", "--clipboard", "--format", "jpg" },
                 new[] { "--region", "10,10,200,200", "--file", ".\\out\\capture", "--format", "webp" },
+                new[] { "--region", "10,10,200,200", "--clipboard", "--window-title" },
+                new[] { "--region", "10,10,200,200", "--clipboard", "--window-title", "" },
                 new[] { "--region", "10,10,200,200", "--unknown", "value", "--clipboard" }
             };
 
             foreach (var args in invalidArgumentSets)
             {
-                var success = Program.TryParseArguments(args, out var options, out var errorMessage, out var showHelp);
+                var success = CliArgumentParser.TryParseArguments(args, out var options, out var errorMessage, out var showHelp);
 
                 Assert.IsFalse(success);
                 Assert.IsFalse(showHelp);
@@ -108,7 +112,7 @@ namespace ScreenShotNet.Tests
         [TestMethod]
         public void TryParseArguments_ValidClipboardAndFileArguments_ParsesSuccessfully()
         {
-            var success = Program.TryParseArguments(
+            var success = CliArgumentParser.TryParseArguments(
                 new[] { "--region", "10,20,640,480", "--clipboard", "--file", ".\\out\\capture.png", "--format", "jpeg" },
                 out var options,
                 out var errorMessage,
@@ -126,10 +130,11 @@ namespace ScreenShotNet.Tests
         [TestMethod]
         public void TryParseArguments_ValuesWithSpaces_ParsesSuccessfully()
         {
-            var success = Program.TryParseArguments(
+            var success = CliArgumentParser.TryParseArguments(
                 new[]
                 {
                     "--region", "10,20,640,480",
+                    "--window-title", "Visual Studio",
                     "--file", "D:\\temp\\my capture.jpg",
                     "--format", "jpg",
                     "--watermark-text", "Draft Build",
@@ -142,6 +147,7 @@ namespace ScreenShotNet.Tests
             Assert.IsTrue(success);
             Assert.IsFalse(showHelp);
             Assert.IsNull(errorMessage);
+            Assert.AreEqual("Visual Studio", options.WindowTitle);
             Assert.IsTrue(options.SaveToFile);
             Assert.AreEqual("D:\\temp\\my capture.jpg", options.FilePath);
             Assert.AreEqual("jpg", options.OutputFormat);
@@ -152,20 +158,20 @@ namespace ScreenShotNet.Tests
         [TestMethod]
         public void TryParseColor_ParsesSupportedFormats()
         {
-            Assert.IsTrue(Program.TryParseColor("#112233", out var rgbColor));
+            Assert.IsTrue(CliArgumentParser.TryParseColor("#112233", out var rgbColor));
             Assert.AreEqual(Color.FromArgb(255, 0x11, 0x22, 0x33), rgbColor);
 
-            Assert.IsTrue(Program.TryParseColor("#80112233", out var argbColor));
+            Assert.IsTrue(CliArgumentParser.TryParseColor("#80112233", out var argbColor));
             Assert.AreEqual(Color.FromArgb(0x80, 0x11, 0x22, 0x33), argbColor);
 
-            Assert.IsTrue(Program.TryParseColor("Red", out var namedColor));
+            Assert.IsTrue(CliArgumentParser.TryParseColor("Red", out var namedColor));
             Assert.AreEqual(Color.Red.ToArgb(), namedColor.ToArgb());
         }
 
         [TestMethod]
         public void TryParseRegion_AllowsNegativeCoordinates()
         {
-            var success = Program.TryParseRegion("-100,-50,320,240", out var region);
+            var success = CliArgumentParser.TryParseRegion("-100,-50,320,240", out var region);
 
             Assert.IsTrue(success);
             Assert.AreEqual(-100, region.X);
@@ -182,7 +188,7 @@ namespace ScreenShotNet.Tests
 
             try
             {
-                var preparedPath = Program.PrepareOutputPath(rawPath);
+                var preparedPath = ScreenshotOperations.PrepareOutputPath(rawPath);
 
                 Assert.IsTrue(preparedPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
                 Assert.IsTrue(Directory.Exists(Path.GetDirectoryName(preparedPath)));
@@ -199,7 +205,7 @@ namespace ScreenShotNet.Tests
         [TestMethod]
         public void PrepareOutputPath_ReplacesExtensionWhenFormatRequested()
         {
-            var preparedPath = Program.PrepareOutputPath(".\\out\\capture.png", ".jpg", true);
+            var preparedPath = ScreenshotOperations.PrepareOutputPath(".\\out\\capture.png", ".jpg", true);
 
             Assert.IsTrue(preparedPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase));
         }
@@ -207,14 +213,14 @@ namespace ScreenShotNet.Tests
         [TestMethod]
         public void TryResolveOutputFormat_InfersFromExtensionAndHandlesInvalidExtension()
         {
-            var jpgResolved = Program.TryResolveOutputFormat(".\\out\\capture.jpeg", null, out var jpgFormat, out var jpgExtension, out var jpgError);
+            var jpgResolved = ScreenshotOperations.TryResolveOutputFormat(".\\out\\capture.jpeg", null, out var jpgFormat, out var jpgExtension, out var jpgError);
 
             Assert.IsTrue(jpgResolved);
             Assert.IsNotNull(jpgFormat);
             Assert.AreEqual(".jpg", jpgExtension);
             Assert.IsNull(jpgError);
 
-            var invalidResolved = Program.TryResolveOutputFormat(".\\out\\capture.webp", null, out var invalidFormat, out var invalidExtension, out var invalidError);
+            var invalidResolved = ScreenshotOperations.TryResolveOutputFormat(".\\out\\capture.webp", null, out var invalidFormat, out var invalidExtension, out var invalidError);
 
             Assert.IsFalse(invalidResolved);
             Assert.IsNull(invalidFormat);
@@ -229,7 +235,7 @@ namespace ScreenShotNet.Tests
             using var bitmap = new Bitmap(4, 4);
             var invalidPath = "capture" + '\0' + ".png";
 
-            var success = Program.TrySaveScreenshotToFile(bitmap, invalidPath, out var savedPath, out var errorMessage);
+            var success = ScreenshotOperations.TrySaveScreenshotToFile(bitmap, invalidPath, out var savedPath, out var errorMessage);
 
             Assert.IsFalse(success);
             Assert.IsNull(savedPath);
@@ -243,7 +249,7 @@ namespace ScreenShotNet.Tests
             var bitmap = new Bitmap(4, 4);
             bitmap.Dispose();
 
-            var success = Program.TrySetClipboardImageWithRetry(bitmap, maxAttempts: 1, delayMilliseconds: 0, out var errorMessage);
+            var success = ScreenshotOperations.TrySetClipboardImageWithRetry(bitmap, maxAttempts: 1, delayMilliseconds: 0, out var errorMessage);
 
             Assert.IsFalse(success);
             Assert.IsFalse(string.IsNullOrWhiteSpace(errorMessage));
@@ -258,7 +264,7 @@ namespace ScreenShotNet.Tests
                 graphics.Clear(Color.Black);
             }
 
-            var watermark = new Program.WatermarkOptions
+            var watermark = new WatermarkOptions
             {
                 Text = "Draft",
                 X = 0,
@@ -267,7 +273,7 @@ namespace ScreenShotNet.Tests
                 Color = Color.White
             };
 
-            Program.ApplyWatermark(bitmap, watermark);
+            ScreenshotOperations.ApplyWatermark(bitmap, watermark);
 
             var hasNonBlackPixel = false;
             for (var y = 0; y < bitmap.Height && !hasNonBlackPixel; y++)

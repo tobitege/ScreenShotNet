@@ -21,7 +21,7 @@ ScreenShotNet captures scripted rectangular screenshots. MIT licensed.
 This is intended as a barebones CLI tool that can be called by AI to create a partial screenshot either to clipboard or file. Obviously this is not a replacement for fully featured UI tools like the awesome [Greenshot](https://github.com/greenshot/greenshot) (also open source).
 
 ```text
-ScreenShotNet --region <x,y,width,height> [--delay <seconds>] [--clipboard] [--file <path>] [--format <png|jpg|bmp|gif|tiff>] [--watermark-text <text> --watermark-pos <x,y> --watermark-size <size> --watermark-color <color>]
+ScreenShotNet --region <x,y,width,height> [--delay <seconds>] [--window-title <titlePrefix>] [--clipboard] [--file <path>] [--format <png|jpg|bmp|gif|tiff>] [--watermark-text <text> --watermark-pos <x,y> --watermark-size <size> --watermark-color <color>]
 ```
 
 Placeholder notes:
@@ -45,6 +45,53 @@ Usual installation process (example for Cursor):
 
 This requires that the tool has been built already and the skill might need editing for correct paths!
 
+## MCP server
+
+The repo now also includes a stdio MCP server project here:
+
+- `src/ScreenShotNet.Mcp`
+
+This is the better fit when an assistant should receive the screenshot image directly as tool output instead of:
+
+1. calling the CLI,
+2. saving a file somewhere, and
+3. opening that file in a separate step.
+
+The MCP tool returns image content directly and can still optionally save the capture to disk or copy it to the clipboard.
+
+### Run the MCP server
+
+Requirements:
+
+- Windows desktop session
+- .NET 8 SDK/runtime because `src/ScreenShotNet.Mcp` targets `net8.0-windows`
+
+```powershell
+dotnet run --project .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj
+```
+
+### Tool
+
+- `capture_screenshot`
+
+Parameters:
+
+- `x`, `y`, `width`, `height`: required capture rectangle in screen pixels
+- `delaySeconds`: optional delay before capture
+- `windowTitle`: optional window title prefix; the first visible top-level window whose title starts with this value is restored and brought to the foreground before capture
+- `format`: optional output format for the returned image and any saved file (`png`, `jpg`, `bmp`, `gif`, `tiff`)
+- `savePath`: optional file path to also save the screenshot to
+- `copyToClipboard`: optional clipboard output
+- `watermarkText`: optional watermark text
+- `watermarkX`, `watermarkY`: required when `watermarkText` is set
+- `watermarkSize`, `watermarkColor`: optional watermark settings, only valid together with `watermarkText`
+
+Notes:
+
+- The server is Windows-only because it captures the live desktop.
+- It should run in an interactive user session where the desktop is available.
+- The existing CLI remains useful for direct scripting, while the MCP server is the better path for assistants that can consume image tool results.
+
 ## Shell quoting rules (PowerShell and CMD)
 
 - No quotes needed for simple values, for example: --region 0,0,400,300 --delay 1.5 --format jpg
@@ -61,6 +108,7 @@ Examples:
 
 - -r, --region: required capture rectangle (x,y,width,height)
 - -d, --delay: optional delay in seconds (default 0)
+- --window-title: optional window title prefix; first visible top-level window with a title that starts with this value is brought to the foreground before capture
 - -c, --clipboard: output screenshot to clipboard (can be combined with --file)
 - -f, --file: output screenshot to file (adds .png if extension is missing; format inferred from extension if present)
 - --format: explicit file format override (png, jpg, bmp, gif, tiff; requires --file)
@@ -74,6 +122,7 @@ Examples:
 
 - ScreenShotNet --region 0,0,400,300 --clipboard
 - ScreenShotNet --region 100,100,640,480 --delay 1.5 --file .\out\capture.png
+- ScreenShotNet --region 100,100,640,480 --window-title "Visual Studio" --file .\out\capture.png
 - ScreenShotNet --region 100,100,640,480 --file .\out\capture --format jpg
 - ScreenShotNet --region 100,100,640,480 --file "D:\temp\my capture.jpg" --format jpg
 - ScreenShotNet --region 100,100,640,480 --clipboard --file .\out\capture.png
@@ -87,7 +136,13 @@ Examples:
 
 ## Building
 
-- Default build target is net48 for maximum compatibility.
+- Default CLI build target is net48 for maximum compatibility.
 - Enable modern targets (net9.0-windows, net10.0-windows, net11.0-windows) with:
   - dotnet build -p:EnableModernTfms=true
   - pwsh .\scripts\build_desktop.ps1 -EnableModernTfms
+
+Current project layout:
+
+- `src/ScreenShotNet.Core`: shared capture, watermark, clipboard, file, and format logic
+- `src/ScreenShotNet.csproj`: existing CLI wrapper
+- `src/ScreenShotNet.Mcp`: stdio MCP server

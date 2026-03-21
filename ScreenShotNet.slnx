@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/ScreenShotNet.Core/ScreenShotNet.Core.csproj" />
+    <Project Path="src/ScreenShotNet.Mcp/ScreenShotNet.Mcp.csproj" />
     <Project Path="src/ScreenShotNet.csproj" />
   </Folder>
   <Folder Name="/tests/">

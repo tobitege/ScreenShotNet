@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ScreenShotNet.csproj" />
+    <ProjectReference Include="..\..\src\ScreenShotNet.Core\ScreenShotNet.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

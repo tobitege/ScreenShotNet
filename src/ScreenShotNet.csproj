@@ -4,13 +4,20 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>ScreenShotNet</AssemblyName>
     <RootNamespace>ScreenShotNet</RootNamespace>
-    <Version>0.1.0</Version>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>false</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Vanara.PInvoke.Gdi32" Version="5.0.0" />
-    <PackageReference Include="Vanara.PInvoke.User32" Version="5.0.0" />
+    <ProjectReference Include="ScreenShotNet.Core\ScreenShotNet.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="ScreenShotNet.Core\**\*.cs" />
+    <Compile Remove="ScreenShotNet.Mcp\**\*.cs" />
+    <EmbeddedResource Remove="ScreenShotNet.Core\**\*" />
+    <EmbeddedResource Remove="ScreenShotNet.Mcp\**\*" />
+    <None Remove="ScreenShotNet.Core\**\*" />
+    <None Remove="ScreenShotNet.Mcp\**\*" />
   </ItemGroup>
 </Project>
