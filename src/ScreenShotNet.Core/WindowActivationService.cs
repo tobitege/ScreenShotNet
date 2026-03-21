@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -7,12 +8,30 @@ namespace ScreenShotNet
 {
     internal static class WindowActivationService
     {
+        private const int DwmwaExtendedFrameBounds = 9;
         private const int SwShow = 5;
         private const int SwRestore = 9;
+        private const uint SwpNosize = 0x0001;
+        private const uint SwpNomove = 0x0002;
+        private const uint SwpShowwindow = 0x0040;
+        private static readonly IntPtr HwndTopmost = new IntPtr(-1);
+        private static readonly IntPtr HwndNotopmost = new IntPtr(-2);
 
         public static bool TryBringWindowToForeground(string titlePrefix, out string matchedTitle, out string errorMessage)
         {
             matchedTitle = null;
+            if (!TryFindWindowByTitlePrefix(titlePrefix, out var windowMatch, out errorMessage))
+            {
+                return false;
+            }
+
+            matchedTitle = windowMatch.Title;
+            return TryBringWindowToForeground(windowMatch, out errorMessage);
+        }
+
+        public static bool TryFindWindowByTitlePrefix(string titlePrefix, out WindowMatch windowMatch, out string errorMessage)
+        {
+            windowMatch = null;
             errorMessage = null;
 
             if (string.IsNullOrWhiteSpace(titlePrefix))
@@ -21,37 +40,8 @@ namespace ScreenShotNet
                 return false;
             }
 
-            var targetWindow = FindWindowByTitlePrefix(titlePrefix, out matchedTitle);
-            if (targetWindow == IntPtr.Zero)
-            {
-                errorMessage = string.Format("No visible top-level window title starts with '{0}'.", titlePrefix);
-                return false;
-            }
-
-            if (IsIconic(targetWindow))
-            {
-                ShowWindow(targetWindow, SwRestore);
-            }
-            else
-            {
-                ShowWindow(targetWindow, SwShow);
-            }
-
-            BringWindowToTop(targetWindow);
-            if (!SetForegroundWindow(targetWindow) && GetForegroundWindow() != targetWindow)
-            {
-                errorMessage = string.Format("Window '{0}' was found, but could not be brought to the foreground.", matchedTitle);
-                return false;
-            }
-
-            Thread.Sleep(150);
-            return true;
-        }
-
-        private static IntPtr FindWindowByTitlePrefix(string titlePrefix, out string matchedTitle)
-        {
             IntPtr matchedHandle = IntPtr.Zero;
-            string matchedWindowTitle = null;
+            string matchedTitle = null;
 
             EnumWindows(
                 delegate (IntPtr hWnd, IntPtr lParam)
@@ -73,13 +63,141 @@ namespace ScreenShotNet
                     }
 
                     matchedHandle = hWnd;
-                    matchedWindowTitle = windowTitle;
+                    matchedTitle = windowTitle;
                     return false;
                 },
                 IntPtr.Zero);
 
-            matchedTitle = matchedWindowTitle;
-            return matchedHandle;
+            if (matchedHandle == IntPtr.Zero)
+            {
+                errorMessage = string.Format("No visible top-level window title starts with '{0}'.", titlePrefix);
+                return false;
+            }
+
+            windowMatch = new WindowMatch
+            {
+                Handle = matchedHandle,
+                Title = matchedTitle
+            };
+            return true;
+        }
+
+        public static bool TryBringWindowToForeground(WindowMatch windowMatch, out string errorMessage)
+        {
+            errorMessage = null;
+
+            if (windowMatch == null || windowMatch.Handle == IntPtr.Zero)
+            {
+                errorMessage = "Window handle is invalid.";
+                return false;
+            }
+
+            var targetWindow = windowMatch.Handle;
+            var foregroundWindow = GetForegroundWindow();
+            var currentThreadId = GetCurrentThreadId();
+            uint ignoredProcessId;
+            var foregroundThreadId = foregroundWindow != IntPtr.Zero ? GetWindowThreadProcessId(foregroundWindow, out ignoredProcessId) : 0u;
+            var targetThreadId = GetWindowThreadProcessId(targetWindow, out ignoredProcessId);
+            var attachedToForeground = false;
+            var attachedToTarget = false;
+
+            try
+            {
+                if (foregroundThreadId != 0 && foregroundThreadId != currentThreadId)
+                {
+                    attachedToForeground = AttachThreadInput(currentThreadId, foregroundThreadId, true);
+                }
+
+                if (targetThreadId != 0 && targetThreadId != currentThreadId)
+                {
+                    attachedToTarget = AttachThreadInput(currentThreadId, targetThreadId, true);
+                }
+
+                if (IsIconic(targetWindow))
+                {
+                    ShowWindowAsync(targetWindow, SwRestore);
+                }
+                else
+                {
+                    ShowWindowAsync(targetWindow, SwShow);
+                }
+
+                SetWindowPos(targetWindow, HwndTopmost, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpShowwindow);
+                SetWindowPos(targetWindow, HwndNotopmost, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpShowwindow);
+
+                for (var attempt = 0; attempt < 10; attempt++)
+                {
+                    BringWindowToTop(targetWindow);
+                    SetForegroundWindow(targetWindow);
+
+                    if (GetForegroundWindow() == targetWindow)
+                    {
+                        Thread.Sleep(150);
+                        return true;
+                    }
+
+                    Thread.Sleep(50);
+                }
+            }
+            finally
+            {
+                if (attachedToTarget)
+                {
+                    AttachThreadInput(currentThreadId, targetThreadId, false);
+                }
+
+                if (attachedToForeground)
+                {
+                    AttachThreadInput(currentThreadId, foregroundThreadId, false);
+                }
+            }
+
+            errorMessage = string.Format("Window '{0}' was found, but Windows blocked foreground activation.", windowMatch.Title);
+            return false;
+        }
+
+        public static bool TryGetWindowBounds(WindowMatch windowMatch, out Rectangle bounds, out string errorMessage)
+        {
+            bounds = Rectangle.Empty;
+            errorMessage = null;
+
+            if (windowMatch == null || windowMatch.Handle == IntPtr.Zero)
+            {
+                errorMessage = "Window handle is invalid.";
+                return false;
+            }
+
+            if (TryGetExtendedFrameBounds(windowMatch.Handle, out bounds))
+            {
+                return true;
+            }
+
+            if (!GetWindowRect(windowMatch.Handle, out var rect))
+            {
+                errorMessage = string.Format("Failed to read bounds for window '{0}'.", windowMatch.Title);
+                return false;
+            }
+
+            bounds = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                errorMessage = string.Format("Window '{0}' returned invalid bounds.", windowMatch.Title);
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryGetExtendedFrameBounds(IntPtr hWnd, out Rectangle bounds)
+        {
+            bounds = Rectangle.Empty;
+            if (DwmGetWindowAttribute(hWnd, DwmwaExtendedFrameBounds, out var rect, Marshal.SizeOf(typeof(NativeRect))) != 0)
+            {
+                return false;
+            }
+
+            bounds = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
+            return bounds.Width > 0 && bounds.Height > 0;
         }
 
         private static string GetWindowTitle(IntPtr hWnd)
@@ -117,6 +235,9 @@ namespace ScreenShotNet
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
         [DllImport("user32.dll")]
+        private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
         private static extern bool IsIconic(IntPtr hWnd);
 
         [DllImport("user32.dll")]
@@ -127,5 +248,32 @@ namespace ScreenShotNet
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out NativeRect pvAttribute, int cbAttribute);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
     }
 }

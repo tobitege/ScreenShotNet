@@ -20,12 +20,42 @@ namespace ScreenShotNet
 
         public static Bitmap CaptureScreenshot(Rectangle region, double delaySeconds, string windowTitle)
         {
+            return CaptureScreenshot(region, delaySeconds, windowTitle, false);
+        }
+
+        public static Bitmap CaptureScreenshot(Rectangle region, double delaySeconds, string windowTitle, bool useRelativeToWindow)
+        {
+            var effectiveRegion = region;
+
             if (!string.IsNullOrWhiteSpace(windowTitle))
             {
-                if (!WindowActivationService.TryBringWindowToForeground(windowTitle, out var _, out var windowError))
+                if (!WindowActivationService.TryFindWindowByTitlePrefix(windowTitle, out var windowMatch, out var windowError))
                 {
                     throw new InvalidOperationException(windowError);
                 }
+
+                if (!WindowActivationService.TryBringWindowToForeground(windowMatch, out windowError))
+                {
+                    throw new InvalidOperationException(windowError);
+                }
+
+                if (useRelativeToWindow)
+                {
+                    if (!WindowActivationService.TryGetWindowBounds(windowMatch, out var windowBounds, out windowError))
+                    {
+                        throw new InvalidOperationException(windowError);
+                    }
+
+                    effectiveRegion = new Rectangle(
+                        windowBounds.Left + region.X,
+                        windowBounds.Top + region.Y,
+                        region.Width,
+                        region.Height);
+                }
+            }
+            else if (useRelativeToWindow)
+            {
+                throw new ArgumentException("Relative capture offsets require a window title.", nameof(useRelativeToWindow));
             }
 
             if (delaySeconds > 0)
@@ -33,7 +63,98 @@ namespace ScreenShotNet
                 Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
             }
 
-            return ScreenCaptureService.CaptureRegion(region);
+            return ScreenCaptureService.CaptureRegion(effectiveRegion);
+        }
+
+        public static Bitmap CaptureWindowScreenshot(string windowTitle, double delaySeconds, out string matchedWindowTitle)
+        {
+            matchedWindowTitle = null;
+
+            if (delaySeconds < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(delaySeconds), "Delay must be zero or greater.");
+            }
+
+            if (!WindowActivationService.TryFindWindowByTitlePrefix(windowTitle, out var windowMatch, out var windowError))
+            {
+                throw new InvalidOperationException(windowError);
+            }
+
+            if (!WindowActivationService.TryBringWindowToForeground(windowMatch, out windowError))
+            {
+                throw new InvalidOperationException(windowError);
+            }
+
+            if (delaySeconds > 0)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
+            }
+
+            if (!WindowActivationService.TryGetWindowBounds(windowMatch, out var bounds, out windowError))
+            {
+                throw new InvalidOperationException(windowError);
+            }
+
+            matchedWindowTitle = windowMatch.Title;
+            return ScreenCaptureService.CaptureRegion(bounds);
+        }
+
+        public static Bitmap CaptureCenteredWindowScreenshot(string windowTitle, int width, int height, double delaySeconds, out string matchedWindowTitle, out Rectangle captureRegion)
+        {
+            matchedWindowTitle = null;
+            captureRegion = Rectangle.Empty;
+
+            if (width <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(width), "Width must be greater than zero.");
+            }
+
+            if (height <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(height), "Height must be greater than zero.");
+            }
+
+            if (delaySeconds < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(delaySeconds), "Delay must be zero or greater.");
+            }
+
+            if (!WindowActivationService.TryFindWindowByTitlePrefix(windowTitle, out var windowMatch, out var windowError))
+            {
+                throw new InvalidOperationException(windowError);
+            }
+
+            if (!WindowActivationService.TryBringWindowToForeground(windowMatch, out windowError))
+            {
+                throw new InvalidOperationException(windowError);
+            }
+
+            if (delaySeconds > 0)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
+            }
+
+            if (!WindowActivationService.TryGetWindowBounds(windowMatch, out var windowBounds, out windowError))
+            {
+                throw new InvalidOperationException(windowError);
+            }
+
+            if (width > windowBounds.Width)
+            {
+                throw new ArgumentOutOfRangeException(nameof(width), string.Format("Requested width {0} exceeds matched window '{1}' width {2}.", width, windowMatch.Title, windowBounds.Width));
+            }
+
+            if (height > windowBounds.Height)
+            {
+                throw new ArgumentOutOfRangeException(nameof(height), string.Format("Requested height {0} exceeds matched window '{1}' height {2}.", height, windowMatch.Title, windowBounds.Height));
+            }
+
+            var centeredX = windowBounds.Left + ((windowBounds.Width - width) / 2);
+            var centeredY = windowBounds.Top + ((windowBounds.Height - height) / 2);
+
+            captureRegion = new Rectangle(centeredX, centeredY, width, height);
+            matchedWindowTitle = windowMatch.Title;
+            return ScreenCaptureService.CaptureRegion(captureRegion);
         }
 
         public static string PrepareOutputPath(string outputPath)

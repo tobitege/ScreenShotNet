@@ -16,6 +16,7 @@ public static class ScreenshotTools
         [Description("Capture height in pixels. Must be greater than 0.")] int height,
         [Description("Optional delay before capture in seconds.")] double delaySeconds = 0,
         [Description("Optional window title prefix. If provided, the first visible top-level window whose title starts with this value is restored and brought to the foreground before capture.")] string? windowTitle = null,
+        [Description("Optional offset mode for x and y. Supported values: absolute, relative. Defaults to relative when windowTitle is set, otherwise absolute. Relative offsets require windowTitle and are measured from the matched window's top-left corner.")] string? captureOffsetMode = null,
         [Description("Optional output image format for the returned image and saved file. Supported values: png, jpg, bmp, gif, tiff.")] string format = "png",
         [Description("Optional file path to also save the screenshot to.")] string? savePath = null,
         [Description("If true, also copy the screenshot to the Windows clipboard.")] bool copyToClipboard = false,
@@ -25,67 +26,63 @@ public static class ScreenshotTools
         [Description("Optional watermark font size in points. Defaults to 24.")] float? watermarkSize = null,
         [Description("Optional watermark color as #RRGGBB, #AARRGGBB, or a known color name. Defaults to #80FFFFFF.")] string? watermarkColor = null)
     {
-        if (width <= 0 || height <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(width), "Width and height must be greater than zero.");
-        }
+        ValidateRegionCaptureArguments(width, height, delaySeconds, format, out var normalizedFormat);
+        var resolvedCaptureOffsetMode = ResolveCaptureOffsetMode(captureOffsetMode, windowTitle);
 
-        if (delaySeconds < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(delaySeconds), "Delay must be zero or greater.");
-        }
-
-        if (!ScreenshotOperations.TryNormalizeOutputFormat(format, out var normalizedFormat))
-        {
-            throw new ArgumentException("Invalid output format. Supported formats: png, jpg, bmp, gif, tiff.", nameof(format));
-        }
-
-        var watermark = BuildWatermarkOptions(watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
-
-        using var screenshot = ScreenshotOperations.CaptureScreenshot(new Rectangle(x, y, width, height), delaySeconds, windowTitle);
-        if (watermark != null)
-        {
-            ScreenshotOperations.ApplyWatermark(screenshot, watermark);
-        }
-
-        string? savedPath = null;
-        if (!string.IsNullOrWhiteSpace(savePath))
-        {
-            if (!ScreenshotOperations.TrySaveScreenshotToFile(screenshot, savePath, normalizedFormat, out savedPath, out var fileError))
-            {
-                throw new InvalidOperationException(fileError);
-            }
-        }
-
-        if (copyToClipboard)
-        {
-            if (!ScreenshotOperations.TrySetClipboardImageWithRetry(screenshot, maxAttempts: 8, delayMilliseconds: 75, out var clipboardError))
-            {
-                throw new InvalidOperationException(clipboardError);
-            }
-        }
-
+        using var screenshot = ScreenshotOperations.CaptureScreenshot(
+            new Rectangle(x, y, width, height),
+            delaySeconds,
+            windowTitle,
+            resolvedCaptureOffsetMode == CaptureOffsetMode.Relative);
         var summary = $"Captured {width}x{height} at {x},{y} as {normalizedFormat}.";
         if (!string.IsNullOrWhiteSpace(windowTitle))
         {
-            summary += $" Activated window prefix '{windowTitle}'.";
+            summary += $" Activated window prefix '{windowTitle}' using {resolvedCaptureOffsetMode.ToString().ToLowerInvariant()} offsets.";
         }
 
-        if (!string.IsNullOrWhiteSpace(savedPath))
-        {
-            summary += $" Saved to {savedPath}.";
-        }
+        return FinalizeCapture(screenshot, normalizedFormat, summary, savePath, copyToClipboard, watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
+    }
 
-        if (copyToClipboard)
-        {
-            summary += " Copied to clipboard.";
-        }
+    [McpServerTool(Name = "capture_window_screenshot"), Description("Capture the first visible top-level window whose title starts with the provided value and return the screenshot image directly.")]
+    public static IEnumerable<AIContent> CaptureWindowScreenshot(
+        [Description("Window title prefix. The first visible top-level window whose title starts with this value is restored and brought to the foreground before capture.")] string windowTitle,
+        [Description("Optional delay before capture in seconds.")] double delaySeconds = 0,
+        [Description("Optional output image format for the returned image and saved file. Supported values: png, jpg, bmp, gif, tiff.")] string format = "png",
+        [Description("Optional file path to also save the screenshot to.")] string? savePath = null,
+        [Description("If true, also copy the screenshot to the Windows clipboard.")] bool copyToClipboard = false,
+        [Description("Optional watermark text to draw onto the screenshot before returning it.")] string? watermarkText = null,
+        [Description("Watermark X position in capture-local pixels. Required when watermarkText is set.")] int? watermarkX = null,
+        [Description("Watermark Y position in capture-local pixels. Required when watermarkText is set.")] int? watermarkY = null,
+        [Description("Optional watermark font size in points. Defaults to 24.")] float? watermarkSize = null,
+        [Description("Optional watermark color as #RRGGBB, #AARRGGBB, or a known color name. Defaults to #80FFFFFF.")] string? watermarkColor = null)
+    {
+        ValidateSharedCaptureArguments(delaySeconds, format, out var normalizedFormat);
 
-        return
-        [
-            new TextContent(summary),
-            new DataContent(ScreenshotOperations.ToDataUri(screenshot, normalizedFormat))
-        ];
+        using var screenshot = ScreenshotOperations.CaptureWindowScreenshot(windowTitle, delaySeconds, out var matchedWindowTitle);
+        var summary = $"Captured window '{matchedWindowTitle}' as {normalizedFormat}.";
+        return FinalizeCapture(screenshot, normalizedFormat, summary, savePath, copyToClipboard, watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
+    }
+
+    [McpServerTool(Name = "capture_center_screenshot"), Description("Capture a centered rectangular region inside the first visible top-level window whose title starts with the provided value and return the screenshot image directly.")]
+    public static IEnumerable<AIContent> CaptureCenterScreenshot(
+        [Description("Window title prefix. The first visible top-level window whose title starts with this value is restored and brought to the foreground before capture.")] string windowTitle,
+        [Description("Capture width in pixels. Must be greater than 0 and fit within the matched window width.")] int width,
+        [Description("Capture height in pixels. Must be greater than 0 and fit within the matched window height.")] int height,
+        [Description("Optional delay before capture in seconds.")] double delaySeconds = 0,
+        [Description("Optional output image format for the returned image and saved file. Supported values: png, jpg, bmp, gif, tiff.")] string format = "png",
+        [Description("Optional file path to also save the screenshot to.")] string? savePath = null,
+        [Description("If true, also copy the screenshot to the Windows clipboard.")] bool copyToClipboard = false,
+        [Description("Optional watermark text to draw onto the screenshot before returning it.")] string? watermarkText = null,
+        [Description("Watermark X position in capture-local pixels. Required when watermarkText is set.")] int? watermarkX = null,
+        [Description("Watermark Y position in capture-local pixels. Required when watermarkText is set.")] int? watermarkY = null,
+        [Description("Optional watermark font size in points. Defaults to 24.")] float? watermarkSize = null,
+        [Description("Optional watermark color as #RRGGBB, #AARRGGBB, or a known color name. Defaults to #80FFFFFF.")] string? watermarkColor = null)
+    {
+        ValidateRegionCaptureArguments(width, height, delaySeconds, format, out var normalizedFormat);
+
+        using var screenshot = ScreenshotOperations.CaptureCenteredWindowScreenshot(windowTitle, width, height, delaySeconds, out var matchedWindowTitle, out var captureRegion);
+        var summary = $"Captured centered {width}x{height} region in window '{matchedWindowTitle}' at {captureRegion.X},{captureRegion.Y} as {normalizedFormat}.";
+        return FinalizeCapture(screenshot, normalizedFormat, summary, savePath, copyToClipboard, watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
     }
 
     private static WatermarkOptions? BuildWatermarkOptions(string? watermarkText, int? watermarkX, int? watermarkY, float? watermarkSize, string? watermarkColor)
@@ -127,5 +124,111 @@ public static class ScreenshotTools
             Size = watermarkSize ?? 24f,
             Color = parsedWatermarkColor
         };
+    }
+
+    private static void ValidateRegionCaptureArguments(int width, int height, double delaySeconds, string format, out string normalizedFormat)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(width), "Width and height must be greater than zero.");
+        }
+
+        ValidateSharedCaptureArguments(delaySeconds, format, out normalizedFormat);
+    }
+
+    private static void ValidateSharedCaptureArguments(double delaySeconds, string format, out string normalizedFormat)
+    {
+        if (delaySeconds < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(delaySeconds), "Delay must be zero or greater.");
+        }
+
+        if (!ScreenshotOperations.TryNormalizeOutputFormat(format, out normalizedFormat))
+        {
+            throw new ArgumentException("Invalid output format. Supported formats: png, jpg, bmp, gif, tiff.", nameof(format));
+        }
+    }
+
+    private static CaptureOffsetMode ResolveCaptureOffsetMode(string? captureOffsetMode, string? windowTitle)
+    {
+        if (string.IsNullOrWhiteSpace(captureOffsetMode))
+        {
+            return string.IsNullOrWhiteSpace(windowTitle) ? CaptureOffsetMode.Absolute : CaptureOffsetMode.Relative;
+        }
+
+        if (string.Equals(captureOffsetMode, "absolute", StringComparison.OrdinalIgnoreCase))
+        {
+            return CaptureOffsetMode.Absolute;
+        }
+
+        if (string.Equals(captureOffsetMode, "relative", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(windowTitle))
+            {
+                throw new ArgumentException("captureOffsetMode 'relative' requires windowTitle.", nameof(captureOffsetMode));
+            }
+
+            return CaptureOffsetMode.Relative;
+        }
+
+        throw new ArgumentException("Invalid captureOffsetMode. Supported values: absolute, relative.", nameof(captureOffsetMode));
+    }
+
+    private static IEnumerable<AIContent> FinalizeCapture(
+        Bitmap screenshot,
+        string normalizedFormat,
+        string summary,
+        string? savePath,
+        bool copyToClipboard,
+        string? watermarkText,
+        int? watermarkX,
+        int? watermarkY,
+        float? watermarkSize,
+        string? watermarkColor)
+    {
+        var watermark = BuildWatermarkOptions(watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
+        if (watermark != null)
+        {
+            ScreenshotOperations.ApplyWatermark(screenshot, watermark);
+        }
+
+        string? savedPath = null;
+        if (!string.IsNullOrWhiteSpace(savePath))
+        {
+            if (!ScreenshotOperations.TrySaveScreenshotToFile(screenshot, savePath, normalizedFormat, out savedPath, out var fileError))
+            {
+                throw new InvalidOperationException(fileError);
+            }
+        }
+
+        if (copyToClipboard)
+        {
+            if (!ScreenshotOperations.TrySetClipboardImageWithRetry(screenshot, maxAttempts: 8, delayMilliseconds: 75, out var clipboardError))
+            {
+                throw new InvalidOperationException(clipboardError);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(savedPath))
+        {
+            summary += $" Saved to {savedPath}.";
+        }
+
+        if (copyToClipboard)
+        {
+            summary += " Copied to clipboard.";
+        }
+
+        return
+        [
+            new TextContent(summary),
+            new DataContent(ScreenshotOperations.ToDataUri(screenshot, normalizedFormat))
+        ];
+    }
+
+    private enum CaptureOffsetMode
+    {
+        Absolute,
+        Relative
     }
 }
