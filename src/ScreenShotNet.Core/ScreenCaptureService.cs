@@ -12,9 +12,20 @@ namespace ScreenShotNet
     {
         public static Bitmap CaptureRegion(Rectangle region)
         {
+            Point ignoredCursorPosition;
+            return CaptureRegion(region, out ignoredCursorPosition);
+        }
+
+        public static Bitmap CaptureRegion(Rectangle region, out Point cursorScreenPosition)
+        {
             if (region.Width <= 0 || region.Height <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(region), "Capture region width and height must be greater than zero.");
+            }
+
+            if (!TryGetCursorPosition(out cursorScreenPosition))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to read the cursor position.");
             }
 
             var rasterOperation = (RasterOperationMode)((int)RasterOperationMode.SRCCOPY | (int)RasterOperationMode.CAPTUREBLT);
@@ -32,6 +43,28 @@ namespace ScreenShotNet
 
             using var image = Image.FromHbitmap(bitmapHandle.DangerousGetHandle());
             return new Bitmap(image);
+        }
+
+        private static bool TryGetCursorPosition(out Point cursorScreenPosition)
+        {
+            cursorScreenPosition = Point.Empty;
+            if (!GetCursorPos(out var point))
+            {
+                return false;
+            }
+
+            cursorScreenPosition = new Point(point.X, point.Y);
+            return true;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetCursorPos(out NativePoint lpPoint);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativePoint
+        {
+            public int X;
+            public int Y;
         }
     }
 }

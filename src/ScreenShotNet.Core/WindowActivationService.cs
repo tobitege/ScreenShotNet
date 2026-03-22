@@ -167,14 +167,48 @@ namespace ScreenShotNet
                 return false;
             }
 
-            if (TryGetExtendedFrameBounds(windowMatch.Handle, out bounds))
+            if (TryGetRawWindowBounds(windowMatch, out bounds, out errorMessage))
             {
                 return true;
             }
 
+            return TryGetExtendedFrameBounds(windowMatch, out bounds, out errorMessage);
+        }
+
+        public static bool TryGetExtendedFrameBounds(WindowMatch windowMatch, out Rectangle bounds, out string errorMessage)
+        {
+            bounds = Rectangle.Empty;
+            errorMessage = null;
+
+            if (windowMatch == null || windowMatch.Handle == IntPtr.Zero)
+            {
+                errorMessage = "Window handle is invalid.";
+                return false;
+            }
+
+            if (!TryGetExtendedFrameBounds(windowMatch.Handle, out bounds))
+            {
+                errorMessage = string.Format("Failed to read extended frame bounds for window '{0}'.", windowMatch.Title);
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetRawWindowBounds(WindowMatch windowMatch, out Rectangle bounds, out string errorMessage)
+        {
+            bounds = Rectangle.Empty;
+            errorMessage = null;
+
+            if (windowMatch == null || windowMatch.Handle == IntPtr.Zero)
+            {
+                errorMessage = "Window handle is invalid.";
+                return false;
+            }
+
             if (!GetWindowRect(windowMatch.Handle, out var rect))
             {
-                errorMessage = string.Format("Failed to read bounds for window '{0}'.", windowMatch.Title);
+                errorMessage = string.Format("Failed to read raw bounds for window '{0}'.", windowMatch.Title);
                 return false;
             }
 

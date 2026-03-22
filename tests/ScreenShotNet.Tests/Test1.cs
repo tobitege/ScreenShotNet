@@ -290,5 +290,55 @@ namespace ScreenShotNet.Tests
 
             Assert.IsTrue(hasNonBlackPixel);
         }
+
+        [TestMethod]
+        public void ApplyCursorReticle_DrawsRedReticleWhenCursorIsInsideCapture()
+        {
+            using var bitmap = new Bitmap(40, 40);
+            using (var graphics = Graphics.FromImage(bitmap))
+            {
+                graphics.Clear(Color.Black);
+            }
+
+            var applied = ScreenshotOperations.ApplyCursorReticle(
+                bitmap,
+                new Rectangle(100, 200, 40, 40),
+                new Point(120, 220));
+
+            var hasRedDominantPixel = false;
+            for (var y = 0; y < bitmap.Height && !hasRedDominantPixel; y++)
+            {
+                for (var x = 0; x < bitmap.Width; x++)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    if (pixel.ToArgb() != Color.Black.ToArgb() && pixel.R > pixel.G && pixel.R > pixel.B)
+                    {
+                        hasRedDominantPixel = true;
+                        break;
+                    }
+                }
+            }
+
+            Assert.IsTrue(applied);
+            Assert.IsTrue(hasRedDominantPixel);
+        }
+
+        [TestMethod]
+        public void ApplyCursorReticle_ReturnsFalseWhenCursorIsOutsideCapture()
+        {
+            using var bitmap = new Bitmap(40, 40);
+            using (var graphics = Graphics.FromImage(bitmap))
+            {
+                graphics.Clear(Color.Black);
+            }
+
+            var applied = ScreenshotOperations.ApplyCursorReticle(
+                bitmap,
+                new Rectangle(100, 200, 40, 40),
+                new Point(10, 20));
+
+            Assert.IsFalse(applied);
+            Assert.AreEqual(Color.Black.ToArgb(), bitmap.GetPixel(20, 20).ToArgb());
+        }
     }
 }

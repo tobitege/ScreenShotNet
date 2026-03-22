@@ -75,20 +75,36 @@ dotnet run --project .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj
 - `capture_screenshot`
   Capture a rectangular region using explicit coordinates.
   Parameters:
-  `x`, `y`, `width`, `height` required; `delaySeconds`, `windowTitle`, `captureOffsetMode`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
+  `x`, `y`, `width`, `height` required; `delaySeconds`, `windowTitle`, `captureOffsetMode`, `withCursor`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
   If `windowTitle` is set, the first visible top-level window whose title starts with that value is restored and brought to the foreground before capture.
   `captureOffsetMode=relative` means `x` and `y` are measured from the matched window's top-left corner and requires `windowTitle`.
+  If `withCursor` is `true`, the mouse cursor position at capture time is marked as a red reticle on the image.
 
 - `capture_window_screenshot`
   Capture the full bounds of the first visible top-level window whose title starts with `windowTitle`.
   Parameters:
-  `windowTitle` required; `delaySeconds`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
+  `windowTitle` required; `delaySeconds`, `withCursor`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
+  If `withCursor` is `true`, the mouse cursor position at capture time is marked as a red reticle on the image.
 
 - `capture_center_screenshot`
   Capture a centered crop inside the matched window.
   Parameters:
-  `windowTitle`, `width`, `height` required; `delaySeconds`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
+  `windowTitle`, `width`, `height` required; `delaySeconds`, `withCursor`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
   The capture rectangle is centered within the matched window and must fit completely inside its resolved bounds.
+  If `withCursor` is `true`, the mouse cursor position at capture time is marked as a red reticle on the image.
+
+Example MCP call for a full window capture with cursor marker:
+
+```json
+{
+  "tool": "capture_window_screenshot",
+  "arguments": {
+    "windowTitle": "Dual Universe",
+    "withCursor": true,
+    "format": "png"
+  }
+}
+```
 
 Example MCP call for a centered crop:
 
@@ -99,6 +115,7 @@ Example MCP call for a centered crop:
     "windowTitle": "Visual Studio",
     "width": 800,
     "height": 600,
+    "withCursor": true,
     "format": "png"
   }
 }
@@ -108,6 +125,9 @@ Notes:
 
 - The server is Windows-only because it captures the live desktop.
 - It should run in an interactive user session where the desktop is available.
+- `withCursor` is currently an MCP parameter and not a CLI switch.
+- `withCursor` is DPI-aware and tuned for multi-monitor desktop coordinates.
+- If `withCursor=true` and the cursor is outside the captured region, no reticle is drawn.
 - `capture_center_screenshot` computes the top-left corner automatically so the requested rectangle is centered within the matched window.
 - The existing CLI remains useful for direct scripting, while the MCP server is the better path for assistants that can consume image tool results.
 

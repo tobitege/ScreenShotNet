@@ -13,6 +13,7 @@ namespace ScreenShotNet
         [STAThread]
         private static int Main(string[] args)
         {
+            DpiAwarenessService.EnableBestAvailableDpiAwareness();
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
             CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 

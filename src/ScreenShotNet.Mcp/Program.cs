@@ -3,6 +3,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using ScreenShotNet;
+
+DpiAwarenessService.EnableBestAvailableDpiAwareness();
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.AddConsole(options =>

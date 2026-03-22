@@ -13,6 +13,11 @@ namespace ScreenShotNet
 {
     public static class ScreenshotOperations
     {
+        private const int CursorReticleGreenshotOffset = 16;
+        private const int CursorReticleRadius = 10;
+        private const int CursorReticleGap = 4;
+        private const int CursorReticleLineLength = 8;
+
         public static Bitmap CaptureScreenshot(Rectangle region, double delaySeconds)
         {
             return CaptureScreenshot(region, delaySeconds, null);
@@ -24,6 +29,13 @@ namespace ScreenShotNet
         }
 
         public static Bitmap CaptureScreenshot(Rectangle region, double delaySeconds, string windowTitle, bool useRelativeToWindow)
+        {
+            Rectangle ignoredCaptureRegion;
+            Point ignoredCursorScreenPosition;
+            return CaptureScreenshot(region, delaySeconds, windowTitle, useRelativeToWindow, out ignoredCaptureRegion, out ignoredCursorScreenPosition);
+        }
+
+        public static Bitmap CaptureScreenshot(Rectangle region, double delaySeconds, string windowTitle, bool useRelativeToWindow, out Rectangle captureRegion, out Point cursorScreenPosition)
         {
             var effectiveRegion = region;
 
@@ -63,12 +75,26 @@ namespace ScreenShotNet
                 Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
             }
 
-            return ScreenCaptureService.CaptureRegion(effectiveRegion);
+            captureRegion = effectiveRegion;
+            return ScreenCaptureService.CaptureRegion(effectiveRegion, out cursorScreenPosition);
         }
 
         public static Bitmap CaptureWindowScreenshot(string windowTitle, double delaySeconds, out string matchedWindowTitle)
         {
+            Rectangle ignoredCaptureRegion;
+            Point ignoredCursorScreenPosition;
+            return CaptureWindowScreenshot(windowTitle, delaySeconds, out matchedWindowTitle, out ignoredCaptureRegion, out ignoredCursorScreenPosition);
+        }
+
+        public static Bitmap CaptureWindowScreenshot(string windowTitle, double delaySeconds, out string matchedWindowTitle, out Rectangle captureRegion, out Point cursorScreenPosition)
+        {
+            return CaptureWindowScreenshot(windowTitle, delaySeconds, false, out matchedWindowTitle, out captureRegion, out cursorScreenPosition);
+        }
+
+        public static Bitmap CaptureWindowScreenshot(string windowTitle, double delaySeconds, bool useRawWindowBounds, out string matchedWindowTitle, out Rectangle captureRegion, out Point cursorScreenPosition)
+        {
             matchedWindowTitle = null;
+            captureRegion = Rectangle.Empty;
 
             if (delaySeconds < 0)
             {
@@ -90,16 +116,27 @@ namespace ScreenShotNet
                 Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
             }
 
-            if (!WindowActivationService.TryGetWindowBounds(windowMatch, out var bounds, out windowError))
+            Rectangle bounds;
+            var boundsResolved = useRawWindowBounds
+                ? WindowActivationService.TryGetRawWindowBounds(windowMatch, out bounds, out windowError)
+                : WindowActivationService.TryGetWindowBounds(windowMatch, out bounds, out windowError);
+            if (!boundsResolved)
             {
                 throw new InvalidOperationException(windowError);
             }
 
             matchedWindowTitle = windowMatch.Title;
-            return ScreenCaptureService.CaptureRegion(bounds);
+            captureRegion = bounds;
+            return ScreenCaptureService.CaptureRegion(bounds, out cursorScreenPosition);
         }
 
         public static Bitmap CaptureCenteredWindowScreenshot(string windowTitle, int width, int height, double delaySeconds, out string matchedWindowTitle, out Rectangle captureRegion)
+        {
+            Point ignoredCursorScreenPosition;
+            return CaptureCenteredWindowScreenshot(windowTitle, width, height, delaySeconds, out matchedWindowTitle, out captureRegion, out ignoredCursorScreenPosition);
+        }
+
+        public static Bitmap CaptureCenteredWindowScreenshot(string windowTitle, int width, int height, double delaySeconds, out string matchedWindowTitle, out Rectangle captureRegion, out Point cursorScreenPosition)
         {
             matchedWindowTitle = null;
             captureRegion = Rectangle.Empty;
@@ -154,7 +191,7 @@ namespace ScreenShotNet
 
             captureRegion = new Rectangle(centeredX, centeredY, width, height);
             matchedWindowTitle = windowMatch.Title;
-            return ScreenCaptureService.CaptureRegion(captureRegion);
+            return ScreenCaptureService.CaptureRegion(captureRegion, out cursorScreenPosition);
         }
 
         public static string PrepareOutputPath(string outputPath)
@@ -301,6 +338,142 @@ namespace ScreenShotNet
             graphics.DrawString(watermark.Text, font, brush, new PointF(watermark.X, watermark.Y));
         }
 
+        public static bool ApplyCursorReticle(Bitmap screenshot, Rectangle captureRegion, Point cursorScreenPosition)
+        {
+            if (!captureRegion.Contains(cursorScreenPosition))
+            {
+                return false;
+            }
+
+            var relativeCursorPosition = new Point(cursorScreenPosition.X - captureRegion.Left, cursorScreenPosition.Y - captureRegion.Top);
+            return ApplyCursorReticleAtRelativePosition(screenshot, relativeCursorPosition);
+        }
+
+        public static bool ApplyCursorReticleForCapture(Bitmap screenshot, Rectangle captureRegion, Point cursorScreenPosition)
+        {
+            if (!captureRegion.Contains(cursorScreenPosition))
+            {
+                return false;
+            }
+
+            var relativeCursorPosition = new Point(cursorScreenPosition.X - captureRegion.Left, cursorScreenPosition.Y - captureRegion.Top);
+            if (TryGetCurrentCursorLayout(out var cursorSize, out var cursorHotspot))
+            {
+                relativeCursorPosition = new Point(
+                    relativeCursorPosition.X - cursorHotspot.X + (cursorSize.Width / 2) - CursorReticleRadius - CursorReticleGreenshotOffset,
+                    relativeCursorPosition.Y - cursorHotspot.Y + (cursorSize.Height / 2) - CursorReticleRadius - CursorReticleGreenshotOffset);
+            }
+
+            return ApplyCursorReticleAtRelativePosition(screenshot, relativeCursorPosition);
+        }
+
+        private static bool ApplyCursorReticleAtRelativePosition(Bitmap screenshot, Point relativeCursorPosition)
+        {
+            using var graphics = Graphics.FromImage(screenshot);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using var pen = new Pen(Color.Red, 2f);
+
+            graphics.DrawEllipse(
+                pen,
+                relativeCursorPosition.X - CursorReticleRadius,
+                relativeCursorPosition.Y - CursorReticleRadius,
+                CursorReticleRadius * 2,
+                CursorReticleRadius * 2);
+
+            graphics.DrawLine(pen, relativeCursorPosition.X - CursorReticleRadius - CursorReticleLineLength, relativeCursorPosition.Y, relativeCursorPosition.X - CursorReticleGap, relativeCursorPosition.Y);
+            graphics.DrawLine(pen, relativeCursorPosition.X + CursorReticleGap, relativeCursorPosition.Y, relativeCursorPosition.X + CursorReticleRadius + CursorReticleLineLength, relativeCursorPosition.Y);
+            graphics.DrawLine(pen, relativeCursorPosition.X, relativeCursorPosition.Y - CursorReticleRadius - CursorReticleLineLength, relativeCursorPosition.X, relativeCursorPosition.Y - CursorReticleGap);
+            graphics.DrawLine(pen, relativeCursorPosition.X, relativeCursorPosition.Y + CursorReticleGap, relativeCursorPosition.X, relativeCursorPosition.Y + CursorReticleRadius + CursorReticleLineLength);
+
+            return true;
+        }
+
+        private static bool TryGetCurrentCursorLayout(out Size cursorSize, out Point cursorHotspot)
+        {
+            cursorSize = Size.Empty;
+            cursorHotspot = Point.Empty;
+
+            var cursorInfo = new CursorInfo
+            {
+                cbSize = Marshal.SizeOf(typeof(CursorInfo))
+            };
+
+            if (!GetCursorInfo(ref cursorInfo))
+            {
+                return false;
+            }
+
+            if ((cursorInfo.flags & CursorShowing) == 0 || cursorInfo.hCursor == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            if (!GetIconInfo(cursorInfo.hCursor, out var iconInfo))
+            {
+                return false;
+            }
+
+            try
+            {
+                if (!TryGetCursorSize(iconInfo, out cursorSize))
+                {
+                    return false;
+                }
+
+                cursorHotspot = new Point(iconInfo.xHotspot, iconInfo.yHotspot);
+                return true;
+            }
+            finally
+            {
+                if (iconInfo.hbmMask != IntPtr.Zero)
+                {
+                    DeleteObject(iconInfo.hbmMask);
+                }
+
+                if (iconInfo.hbmColor != IntPtr.Zero)
+                {
+                    DeleteObject(iconInfo.hbmColor);
+                }
+            }
+        }
+
+        private static bool TryGetCursorSize(IconInfo iconInfo, out Size cursorSize)
+        {
+            cursorSize = Size.Empty;
+
+            if (iconInfo.hbmColor != IntPtr.Zero)
+            {
+                if (GetObject(iconInfo.hbmColor, Marshal.SizeOf(typeof(BitmapInfoHeader)), out var colorBitmap) == 0)
+                {
+                    return false;
+                }
+
+                cursorSize = new Size(colorBitmap.bmWidth, Math.Abs(colorBitmap.bmHeight));
+                return cursorSize.Width > 0 && cursorSize.Height > 0;
+            }
+
+            if (iconInfo.hbmMask == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            if (GetObject(iconInfo.hbmMask, Marshal.SizeOf(typeof(BitmapInfoHeader)), out var maskBitmap) == 0)
+            {
+                return false;
+            }
+
+            var height = Math.Abs(maskBitmap.bmHeight);
+            if (!iconInfo.fIcon && height > 1)
+            {
+                height /= 2;
+            }
+
+            cursorSize = new Size(maskBitmap.bmWidth, height);
+            return cursorSize.Width > 0 && cursorSize.Height > 0;
+        }
+
+
         public static string ToDataUri(Bitmap screenshot, string requestedFormat)
         {
             if (!TryResolveOutputFormatInfo("capture", requestedFormat, out var formatInfo, out var errorMessage))
@@ -434,5 +607,52 @@ namespace ScreenShotNet
 
             public string MimeType { get; }
         }
+
+        private const int CursorShowing = 0x00000001;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetCursorInfo(ref CursorInfo pci);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetIconInfo(IntPtr hIcon, out IconInfo piconinfo);
+
+        [DllImport("gdi32.dll", SetLastError = true)]
+        private static extern bool DeleteObject(IntPtr hObject);
+
+        [DllImport("gdi32.dll", SetLastError = true)]
+        private static extern int GetObject(IntPtr hgdiobj, int cbBuffer, out BitmapInfoHeader lpvObject);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CursorInfo
+        {
+            public int cbSize;
+            public int flags;
+            public IntPtr hCursor;
+            public Point ptScreenPos;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct IconInfo
+        {
+            [MarshalAs(UnmanagedType.Bool)]
+            public bool fIcon;
+            public int xHotspot;
+            public int yHotspot;
+            public IntPtr hbmMask;
+            public IntPtr hbmColor;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BitmapInfoHeader
+        {
+            public int bmType;
+            public int bmWidth;
+            public int bmHeight;
+            public int bmWidthBytes;
+            public short bmPlanes;
+            public short bmBitsPixel;
+            public IntPtr bmBits;
+        }
+
     }
 }

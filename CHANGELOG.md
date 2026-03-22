@@ -14,10 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shared `ScreenShotNet.Core` library for capture, watermark, clipboard, file output, and argument handling used by both the CLI and MCP server.
 - Window-title based activation and full window capture support in the shared capture pipeline.
 - `capture_center_screenshot` MCP tool for capturing a centered region inside a matched window by specifying `windowTitle`, `width`, and `height`.
+- `withCursor` MCP option for marking the mouse cursor location at capture time as a reticle overlay.
 
 ### Changed
 
 - Updated README and skill documentation for the MCP workflow and the expanded screenshot toolset.
+- Improved cursor alignment for `withCursor` on DPI-scaled and multi-monitor Windows setups.
 - Expanded tests and solution/project structure to support the new shared core and MCP server layout.
 - `SKILL.md` shortened.
 
