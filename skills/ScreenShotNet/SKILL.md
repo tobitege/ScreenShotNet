@@ -1,65 +1,48 @@
 ---
 name: ScreenShotNet-screenshot
-description: Capture region screenshots with ScreenShotNet, including delay, optional foreground window activation, output target, and optional watermark overlay
+description: Capture Windows screenshots with ScreenShotNet via MCP when available, otherwise via CLI
 ---
 
 # ScreenShotNet Skill
 
-Use this skill when a user wants to take screenshots via the `ScreenShotNet` project.
+Use this skill when a user wants to take screenshots via CLI or MCP with `ScreenShotNet` on Windows.
 
-## When to use
+Repo: [github.com/tobitege/ScreenShotNet](https://github.com/tobitege/ScreenShotNet)
 
-- User asks to capture a specific region.
-- User asks for delayed capture.
-- User asks to output to clipboard or file.
-- User asks for watermark text with position, size, and color.
+## Prefer This Order
+
+- Prefer MCP when the environment can consume image tool output directly.
+- Fall back to the CLI when MCP is unavailable.
 
 ## Preconditions
 
-- Windows environment.
-- `ScreenShotNet` is built.
-- Binary path exists:
-  `<project-root>\src\bin\Debug\net48\ScreenShotNet.exe`
-  (or Release equivalent).
+- Windows interactive desktop session.
+- MCP server start command: `dotnet run --project .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj`
+- CLI fallback binary: `<project-root>\src\bin\Debug\net48\ScreenShotNet.exe`
 
-## CLI contract
+## MCP Usage
 
-- Required: `--region x,y,width,height`
-- Optional: `--delay seconds`
-- Optional: `--window-title "titlePrefix"`
-- At least one target: `--clipboard` and/or `--file fullPath`
-- Optional watermark:
-  - `--watermark-text "text"`
-  - `--watermark-pos x,y`
-  - `--watermark-size number`
-  - `--watermark-color #RRGGBB | #AARRGGBB | NamedColor`
+- `capture_screenshot` for explicit rectangles.
+- `capture_window_screenshot` for a full matched window.
+- `capture_center_screenshot` for a centered crop inside the matched window.
 
-## Command templates
+## Important Rules
 
-- Clipboard:
-  `& "<project-root>\bin\Any CPU\Debug\net480\ScreenShotNet.exe" --region 0,0,400,300 --clipboard`
-
-- File:
-  `& "<project-root>\bin\Any CPU\Debug\net480\ScreenShotNet.exe" --region 100,100,640,480 --delay 1.5 --file "D:\temp\capture.png"`
-
-- File after bringing a window to the foreground:
-  `& "<project-root>\bin\Any CPU\Debug\net480\ScreenShotNet.exe" --region 100,100,640,480 --window-title "Visual Studio" --file "D:\temp\capture.png"`
-
-- File + watermark:
-  `& "<project-root>\bin\Any CPU\Debug\net480\ScreenShotNet.exe" --region 50,50,500,300 --watermark-text "Draft" --watermark-pos 12,24 --watermark-size 18 --watermark-color "#80FF0000" --file "D:\temp\capture-watermark.png"`
-
-## Validation rules
-
-- Reject invalid region format or non-positive width/height.
-- Reject missing target.
-- Use `--window-title` as a case-insensitive title prefix match, not a wildcard or arbitrary substring match.
-- Reject watermark options without `--watermark-text`.
-- Surface CLI stderr and exit code to user.
-
-## Response style
-
-- Report exact command run.
-- Report exit code.
-- For file output, report absolute saved path.
+- `windowTitle` is a case-insensitive prefix match on visible top-level windows.
+- For `capture_screenshot`, `captureOffsetMode=relative` requires `windowTitle` and treats `x` and `y` as offsets from the matched window's top-left corner.
+- For `capture_center_screenshot`, `width` and `height` must fully fit inside the matched window bounds.
+- Watermark position, size, or color require watermark text.
+- For file output, report the absolute saved path.
 - For clipboard output, confirm completion.
-- If both targets are used, report both outcomes.
+
+## CLI Fallback
+
+- Command shape: `& "<project-root>\src\bin\Debug\net48\ScreenShotNet.exe" --region x,y,width,height [--delay seconds] [--window-title "titlePrefix"] [--clipboard] [--file "path"] [--format png|jpg|bmp|gif|tiff]`
+- `--window-title` is also a case-insensitive prefix match.
+- Surface CLI stderr and exit code to the user.
+
+## Response Style
+
+- For MCP usage, report the tool used and summarize the captured target.
+- For `capture_center_screenshot`, mention the matched window and requested centered size.
+- For CLI usage, report the exact command and exit code.

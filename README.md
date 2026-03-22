@@ -70,43 +70,44 @@ Requirements:
 dotnet run --project .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj
 ```
 
-### Tool
+### Tools
 
 - `capture_screenshot`
-- `capture_window_screenshot`
-- `capture_center_screenshot`
-
-Parameters:
-
-- `x`, `y`, `width`, `height`: required capture rectangle in screen pixels
-- `delaySeconds`: optional delay before capture
-- `windowTitle`: optional window title prefix; the first visible top-level window whose title starts with this value is restored and brought to the foreground before capture
-- `captureOffsetMode`: optional offset mode for `x` and `y`; supports `absolute` and `relative`; defaults to `relative` when `windowTitle` is set, otherwise `absolute`
-- `format`: optional output format for the returned image and any saved file (`png`, `jpg`, `bmp`, `gif`, `tiff`)
-- `savePath`: optional file path to also save the screenshot to
-- `copyToClipboard`: optional clipboard output
-- `watermarkText`: optional watermark text
-- `watermarkX`, `watermarkY`: required when `watermarkText` is set
-- `watermarkSize`, `watermarkColor`: optional watermark settings, only valid together with `watermarkText`
-
-For direct window capture without supplying screen coordinates:
+  Capture a rectangular region using explicit coordinates.
+  Parameters:
+  `x`, `y`, `width`, `height` required; `delaySeconds`, `windowTitle`, `captureOffsetMode`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
+  If `windowTitle` is set, the first visible top-level window whose title starts with that value is restored and brought to the foreground before capture.
+  `captureOffsetMode=relative` means `x` and `y` are measured from the matched window's top-left corner and requires `windowTitle`.
 
 - `capture_window_screenshot`
-- `windowTitle`: required window title prefix; the first visible top-level window whose title starts with this value is restored, brought to the foreground, and captured with its resolved window bounds
-- `delaySeconds`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor`: same behavior as above
-
-For a centered crop inside a matched window:
+  Capture the full bounds of the first visible top-level window whose title starts with `windowTitle`.
+  Parameters:
+  `windowTitle` required; `delaySeconds`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
 
 - `capture_center_screenshot`
-- `windowTitle`: required window title prefix; the first visible top-level window whose title starts with this value is restored and brought to the foreground before capture
-- `width`, `height`: required capture size in pixels; the capture rectangle is centered within the matched window and must fit completely inside its resolved bounds
-- `delaySeconds`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor`: same behavior as above
+  Capture a centered crop inside the matched window.
+  Parameters:
+  `windowTitle`, `width`, `height` required; `delaySeconds`, `format`, `savePath`, `copyToClipboard`, `watermarkText`, `watermarkX`, `watermarkY`, `watermarkSize`, `watermarkColor` optional.
+  The capture rectangle is centered within the matched window and must fit completely inside its resolved bounds.
+
+Example MCP call for a centered crop:
+
+```json
+{
+  "tool": "capture_center_screenshot",
+  "arguments": {
+    "windowTitle": "Visual Studio",
+    "width": 800,
+    "height": 600,
+    "format": "png"
+  }
+}
+```
 
 Notes:
 
 - The server is Windows-only because it captures the live desktop.
 - It should run in an interactive user session where the desktop is available.
-- For `capture_screenshot`, `captureOffsetMode=relative` means `x` and `y` are measured from the matched window's top-left corner. `relative` requires `windowTitle`.
 - `capture_center_screenshot` computes the top-left corner automatically so the requested rectangle is centered within the matched window.
 - The existing CLI remains useful for direct scripting, while the MCP server is the better path for assistants that can consume image tool results.
 
