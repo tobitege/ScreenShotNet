@@ -13,7 +13,7 @@ namespace ScreenShotNet
 {
     public static class ScreenshotOperations
     {
-        private const int CursorReticleGreenshotOffset = 16;
+        private const int CursorReticleGreenshotOffset = 8;
         private const int CursorReticleRadius = 10;
         private const int CursorReticleGap = 4;
         private const int CursorReticleLineLength = 8;
