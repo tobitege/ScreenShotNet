@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Drawing;
 using Microsoft.Extensions.AI;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace ScreenShotNet.Mcp;
@@ -8,6 +9,8 @@ namespace ScreenShotNet.Mcp;
 [McpServerToolType]
 public static class ScreenshotTools
 {
+    private const int MaxInlineImageBytes = 1_048_576;
+
     [McpServerTool(Name = "capture_screenshot"), Description("Capture a rectangular region of the Windows desktop and return the screenshot image directly.")]
     public static IEnumerable<AIContent> CaptureScreenshot(
         [Description("Left edge of the capture region in screen pixels.")] int x,
@@ -239,10 +242,21 @@ public static class ScreenshotTools
             summary += " Copied to clipboard.";
         }
 
+        if (!ScreenshotOperations.TryCreateInlineImageDataUri(screenshot, normalizedFormat, MaxInlineImageBytes, out var dataUri, out _, out var inlineError))
+        {
+            if (!string.IsNullOrWhiteSpace(savedPath))
+            {
+                summary += " Inline image omitted because it exceeds 1 MB.";
+                return [new TextContent(summary)];
+            }
+
+            throw new McpException(inlineError);
+        }
+
         return
         [
             new TextContent(summary),
-            new DataContent(ScreenshotOperations.ToDataUri(screenshot, normalizedFormat))
+            new DataContent(dataUri)
         ];
     }
 

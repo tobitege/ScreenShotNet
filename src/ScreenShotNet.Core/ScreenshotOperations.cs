@@ -474,20 +474,47 @@ namespace ScreenShotNet
         }
 
 
-        public static string ToDataUri(Bitmap screenshot, string requestedFormat)
+        public static bool TryCreateInlineImageDataUri(Bitmap screenshot, string requestedFormat, int maxEncodedBytes, out string dataUri, out long encodedByteCount, out string errorMessage)
         {
-            if (!TryResolveOutputFormatInfo("capture", requestedFormat, out var formatInfo, out var errorMessage))
+            if (!TryResolveOutputFormatInfo("capture", requestedFormat, out var formatInfo, out var formatErrorMessage))
             {
-                throw new ArgumentException(errorMessage, nameof(requestedFormat));
+                dataUri = null;
+                encodedByteCount = 0;
+                errorMessage = formatErrorMessage;
+                return false;
             }
 
             using var stream = new MemoryStream();
             screenshot.Save(stream, formatInfo.ImageFormat);
-            return string.Format(
+            encodedByteCount = stream.Length;
+            if (maxEncodedBytes > 0 && encodedByteCount > maxEncodedBytes)
+            {
+                dataUri = null;
+                errorMessage = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Inline screenshot exceeds {0:N0} bytes ({1:N0} bytes encoded). Use savePath to write the image to a file instead.",
+                    maxEncodedBytes,
+                    encodedByteCount);
+                return false;
+            }
+
+            dataUri = string.Format(
                 CultureInfo.InvariantCulture,
                 "data:{0};base64,{1}",
                 formatInfo.MimeType,
                 Convert.ToBase64String(stream.ToArray()));
+            errorMessage = null;
+            return true;
+        }
+
+        public static string ToDataUri(Bitmap screenshot, string requestedFormat)
+        {
+            if (!TryCreateInlineImageDataUri(screenshot, requestedFormat, maxEncodedBytes: 0, out var dataUri, out _, out var errorMessage))
+            {
+                throw new ArgumentException(errorMessage, nameof(requestedFormat));
+            }
+
+            return dataUri;
         }
 
         private static bool TryResolveOutputFormatInfo(string outputPath, string requestedFormat, out OutputFormatInfo formatInfo, out string errorMessage)

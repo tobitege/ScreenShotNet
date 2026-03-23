@@ -244,6 +244,46 @@ namespace ScreenShotNet.Tests
         }
 
         [TestMethod]
+        public void TryCreateInlineImageDataUri_SmallPng_ReturnsDataUri()
+        {
+            using var bitmap = new Bitmap(20, 20);
+
+            var success = ScreenshotOperations.TryCreateInlineImageDataUri(
+                bitmap,
+                "png",
+                maxEncodedBytes: 1024 * 1024,
+                out var dataUri,
+                out var encodedByteCount,
+                out var errorMessage);
+
+            Assert.IsTrue(success);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(dataUri));
+            Assert.IsTrue(dataUri.StartsWith("data:image/png;base64,", StringComparison.Ordinal));
+            Assert.IsTrue(encodedByteCount > 0);
+            Assert.IsNull(errorMessage);
+        }
+
+        [TestMethod]
+        public void TryCreateInlineImageDataUri_OversizedBmp_ReturnsUseSavePathError()
+        {
+            using var bitmap = new Bitmap(800, 600);
+
+            var success = ScreenshotOperations.TryCreateInlineImageDataUri(
+                bitmap,
+                "bmp",
+                maxEncodedBytes: 1024 * 1024,
+                out var dataUri,
+                out var encodedByteCount,
+                out var errorMessage);
+
+            Assert.IsFalse(success);
+            Assert.IsNull(dataUri);
+            Assert.IsTrue(encodedByteCount > 1024 * 1024);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(errorMessage));
+            StringAssert.Contains(errorMessage, "Use savePath");
+        }
+
+        [TestMethod]
         public void TrySetClipboardImageWithRetry_DisposedImage_ReturnsFailure()
         {
             var bitmap = new Bitmap(4, 4);
