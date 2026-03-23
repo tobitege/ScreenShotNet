@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <EnableModernTfms Condition="'$(EnableModernTfms)' == ''">false</EnableModernTfms>
     <CliTargetFrameworks>net48</CliTargetFrameworks>
     <CliTargetFrameworks Condition="'$(EnableModernTfms)' == 'true'">net48;net9.0-windows;net10.0-windows;net11.0-windows</CliTargetFrameworks>
