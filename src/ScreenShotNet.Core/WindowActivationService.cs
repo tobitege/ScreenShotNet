@@ -9,6 +9,7 @@ namespace ScreenShotNet
     internal static class WindowActivationService
     {
         private const int DwmwaExtendedFrameBounds = 9;
+        private const int DwmwaVisibleFrameBorderThickness = 37;
         private const int SwShow = 5;
         private const int SwRestore = 9;
         private const uint SwpNosize = 0x0001;
@@ -167,12 +168,13 @@ namespace ScreenShotNet
                 return false;
             }
 
-            if (TryGetRawWindowBounds(windowMatch, out bounds, out errorMessage))
+            if (TryGetExtendedFrameBounds(windowMatch, out bounds, out errorMessage))
             {
+                TrimVisibleFrameBorder(windowMatch.Handle, ref bounds);
                 return true;
             }
 
-            return TryGetExtendedFrameBounds(windowMatch, out bounds, out errorMessage);
+            return TryGetRawWindowBounds(windowMatch, out bounds, out errorMessage);
         }
 
         public static bool TryGetExtendedFrameBounds(WindowMatch windowMatch, out Rectangle bounds, out string errorMessage)
@@ -225,13 +227,39 @@ namespace ScreenShotNet
         private static bool TryGetExtendedFrameBounds(IntPtr hWnd, out Rectangle bounds)
         {
             bounds = Rectangle.Empty;
-            if (DwmGetWindowAttribute(hWnd, DwmwaExtendedFrameBounds, out var rect, Marshal.SizeOf(typeof(NativeRect))) != 0)
+            if (DwmGetWindowAttributeRect(hWnd, DwmwaExtendedFrameBounds, out var rect, Marshal.SizeOf(typeof(NativeRect))) != 0)
             {
                 return false;
             }
 
             bounds = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
             return bounds.Width > 0 && bounds.Height > 0;
+        }
+
+        private static void TrimVisibleFrameBorder(IntPtr hWnd, ref Rectangle bounds)
+        {
+            if (DwmGetWindowAttributeInt(hWnd, DwmwaVisibleFrameBorderThickness, out var thickness, Marshal.SizeOf(typeof(int))) != 0)
+            {
+                return;
+            }
+
+            if (thickness <= 0)
+            {
+                return;
+            }
+
+            var trimmed = Rectangle.FromLTRB(
+                bounds.Left + thickness,
+                bounds.Top,
+                bounds.Right - thickness,
+                bounds.Bottom - thickness);
+
+            if (trimmed.Width <= 0 || trimmed.Height <= 0)
+            {
+                return;
+            }
+
+            bounds = trimmed;
         }
 
         private static string GetWindowTitle(IntPtr hWnd)
@@ -298,8 +326,11 @@ namespace ScreenShotNet
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect lpRect);
 
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out NativeRect pvAttribute, int cbAttribute);
+        [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
+        private static extern int DwmGetWindowAttributeRect(IntPtr hwnd, int dwAttribute, out NativeRect pvAttribute, int cbAttribute);
+
+        [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
+        private static extern int DwmGetWindowAttributeInt(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct NativeRect
