@@ -67,8 +67,20 @@ Requirements:
 - .NET 8 SDK/runtime because `src/ScreenShotNet.Mcp` targets `net8.0-windows`
 
 ```powershell
-dotnet run --project .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj
+dotnet build .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj
+.\src\ScreenShotNet.Mcp\bin\Debug\net8.0-windows\ScreenShotNet.Mcp.exe
 ```
+
+For MCP client configuration, point the client at the built executable instead of `dotnet run`:
+
+```json
+{
+  "command": ".\\src\\ScreenShotNet.Mcp\\bin\\Debug\\net8.0-windows\\ScreenShotNet.Mcp.exe",
+  "args": []
+}
+```
+
+`dotnet run` is useful for normal app development, but some MCP hosts do not forward stdio JSON-RPC traffic through it reliably.
 
 ### Tools
 

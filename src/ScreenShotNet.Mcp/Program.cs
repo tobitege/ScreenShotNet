@@ -19,7 +19,7 @@ builder.Services
         options.ServerInfo = new Implementation
         {
             Name = "screenshot-net",
-            Version = "1.0.1",
+            Version = "1.1.0",
             Title = "ScreenShotNet MCP",
             Description = "Captures Windows screen regions and returns screenshot image content directly."
         };

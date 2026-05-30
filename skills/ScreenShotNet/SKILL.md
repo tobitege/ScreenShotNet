@@ -17,7 +17,9 @@ Repo: [github.com/tobitege/ScreenShotNet](https://github.com/tobitege/ScreenShot
 ## Preconditions
 
 - Windows interactive desktop session.
-- MCP server start command: `dotnet run --project .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj`
+- Build the MCP server first: `dotnet build <project-root>\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj`
+- MCP server start command: `<project-root>\src\ScreenShotNet.Mcp\bin\Debug\net8.0-windows\ScreenShotNet.Mcp.exe`
+- Do not use `dotnet run` for MCP client stdio configuration; some hosts do not forward JSON-RPC traffic through it reliably.
 - CLI fallback binary: `<project-root>\src\bin\Debug\net48\ScreenShotNet.exe`
 
 ## MCP Usage
