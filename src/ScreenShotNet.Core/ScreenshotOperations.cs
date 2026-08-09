@@ -259,7 +259,7 @@ namespace ScreenShotNet
             }
             catch (Exception ex) when (ex is ExternalException || ex is UnauthorizedAccessException || ex is IOException || ex is ArgumentException)
             {
-                errorMessage = $"Failed to save screenshot to '{targetPath}': {ex.Message}";
+                errorMessage = $"Failed to save screenshot to '{targetPath}': {ex.Message} Ensure the target directory exists and is writable.";
                 return false;
             }
         }

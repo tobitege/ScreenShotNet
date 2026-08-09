@@ -259,7 +259,7 @@ namespace ScreenShotNet.Tests
                 Assert.IsFalse(success);
                 Assert.IsNull(savedPath);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(errorMessage));
-                StringAssert.Contains(errorMessage, "target directory does not exist");
+                StringAssert.Contains(errorMessage, "Ensure the target directory exists and is writable");
             }
             finally
             {
