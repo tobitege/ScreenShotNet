@@ -90,7 +90,7 @@ jobs:
           "mcp_zip_name=$mcpZipName" >> $env:GITHUB_OUTPUT
 
       - name: Upload zip artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-zips
           path: |
