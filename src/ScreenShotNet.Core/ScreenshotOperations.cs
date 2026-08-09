@@ -215,12 +215,6 @@ namespace ScreenShotNet
             }
 
             path = Path.GetFullPath(path);
-            var directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
             return path;
         }
 
@@ -257,6 +251,11 @@ namespace ScreenShotNet
                 screenshot.Save(targetPath, imageFormat);
                 savedPath = targetPath;
                 return true;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                errorMessage = $"Failed to save screenshot to '{targetPath}': target directory does not exist.";
+                return false;
             }
             catch (Exception ex) when (ex is ExternalException || ex is UnauthorizedAccessException || ex is IOException || ex is ArgumentException)
             {

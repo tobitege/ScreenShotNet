@@ -38,6 +38,7 @@ Repo: [github.com/tobitege/ScreenShotNet](https://github.com/tobitege/ScreenShot
 - If `withCursor=true` and the cursor is outside the captured region, no reticle is drawn.
 - `withCursor` is tuned for DPI-aware, multi-monitor Windows desktop coordinates.
 - Watermark position, size, or color require watermark text.
+- If file output is requested, the target directory must already exist.
 - For file output, report the absolute saved path.
 - For clipboard output, confirm completion.
 

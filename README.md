@@ -139,6 +139,7 @@ Notes:
 - It should run in an interactive user session where the desktop is available.
 - `withCursor` is currently an MCP parameter and not a CLI switch.
 - `withCursor` is DPI-aware and tuned for multi-monitor desktop coordinates.
+- If `savePath` is used, the target directory must already exist.
 - If `withCursor=true` and the cursor is outside the captured region, no reticle is drawn.
 - `capture_center_screenshot` computes the top-left corner automatically so the requested rectangle is centered within the matched window.
 - The existing CLI remains useful for direct scripting, while the MCP server is the better path for assistants that can consume image tool results.
@@ -161,7 +162,7 @@ Examples:
 - -d, --delay: optional delay in seconds (default 0)
 - --window-title: optional window title prefix; first visible top-level window with a title that starts with this value is brought to the foreground before capture
 - -c, --clipboard: output screenshot to clipboard (can be combined with --file)
-- -f, --file: output screenshot to file (adds .png if extension is missing; format inferred from extension if present)
+- -f, --file: output screenshot to file (adds .png if extension is missing; format inferred from extension if present; target directory must already exist)
 - --format: explicit file format override (png, jpg, bmp, gif, tiff; requires --file)
 - --watermark-text: optional watermark text to draw
 - --watermark-pos: watermark text position in capture-local pixels (x,y)

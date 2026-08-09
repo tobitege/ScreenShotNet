@@ -181,17 +181,19 @@ namespace ScreenShotNet.Tests
         }
 
         [TestMethod]
-        public void PrepareOutputPath_AddsPngExtensionAndCreatesDirectory()
+        public void PrepareOutputPath_AddsPngExtensionWithoutCreatingDirectory()
         {
-            var baseDirectory = Path.Combine(Path.GetTempPath(), "ScreenShotNetTests", Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
-            var rawPath = Path.Combine(baseDirectory, "nested", "capture");
+            var baseDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ScreenShotNetTests", Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
+            var expectedDirectory = Path.Combine(baseDirectory, "nested");
+            var rawPath = Path.Combine(expectedDirectory, "capture");
 
             try
             {
                 var preparedPath = ScreenshotOperations.PrepareOutputPath(rawPath);
+                var expectedPath = Path.GetFullPath(Path.Combine(expectedDirectory, "capture.png"));
 
-                Assert.IsTrue(preparedPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase));
-                Assert.IsTrue(Directory.Exists(Path.GetDirectoryName(preparedPath)));
+                Assert.AreEqual(expectedPath, preparedPath);
+                Assert.IsFalse(Directory.Exists(expectedDirectory));
             }
             finally
             {
@@ -241,6 +243,31 @@ namespace ScreenShotNet.Tests
             Assert.IsNull(savedPath);
             Assert.IsFalse(string.IsNullOrWhiteSpace(errorMessage));
             StringAssert.Contains(errorMessage, "Failed to inspect output path");
+        }
+
+        [TestMethod]
+        public void TrySaveScreenshotToFile_MissingDirectory_ReturnsFailure()
+        {
+            using var bitmap = new Bitmap(4, 4);
+            var baseDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ScreenShotNetTests", Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
+            var targetPath = Path.Combine(baseDirectory, "nested", "capture.png");
+
+            try
+            {
+                var success = ScreenshotOperations.TrySaveScreenshotToFile(bitmap, targetPath, out var savedPath, out var errorMessage);
+
+                Assert.IsFalse(success);
+                Assert.IsNull(savedPath);
+                Assert.IsFalse(string.IsNullOrWhiteSpace(errorMessage));
+                StringAssert.Contains(errorMessage, "target directory does not exist");
+            }
+            finally
+            {
+                if (Directory.Exists(baseDirectory))
+                {
+                    Directory.Delete(baseDirectory, true);
+                }
+            }
         }
 
         [TestMethod]

@@ -28,13 +28,14 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-  build_net48_zip:
+  build_release_zips:
     needs: validate
     runs-on: windows-latest
     permissions:
       contents: read
     outputs:
-      zip_name: ${{ steps.package.outputs.zip_name }}
+      cli_zip_name: ${{ steps.package.outputs.cli_zip_name }}
+      mcp_zip_name: ${{ steps.package.outputs.mcp_zip_name }}
     steps:
       - uses: actions/checkout@v6
 
@@ -46,28 +47,59 @@ jobs:
         shell: pwsh
         run: dotnet build .\src\ScreenShotNet.csproj -c Release -f net48
 
-      - name: Package net48 output as zip
+      - name: Build ScreenShotNet.Mcp (net8.0-windows, Release)
+        shell: pwsh
+        run: dotnet build .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj -c Release
+
+      - name: Package release outputs as zip
         id: package
         shell: pwsh
         run: |
-          $zipName = "ScreenShotNet-net48-v${{ needs.validate.outputs.version }}.zip"
-          $outputDir = "src/bin/Release/net48"
-          if (!(Test-Path "$outputDir/ScreenShotNet.exe")) {
-            throw "Build output not found at $outputDir"
+          $cliZipName = "ScreenShotNet-net48-v${{ needs.validate.outputs.version }}.zip"
+          $cliOutputDir = "src/bin/Release/net48"
+          if (!(Test-Path "$cliOutputDir/ScreenShotNet.exe")) {
+            throw "CLI build output not found at $cliOutputDir"
           }
 
-          Compress-Archive -Path "$outputDir/*" -DestinationPath $zipName -Force
-          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+          $mcpZipName = "ScreenShotNet.Mcp-net8.0-windows-v${{ needs.validate.outputs.version }}.zip"
+          $mcpOutputDir = "src/ScreenShotNet.Mcp/bin/Release/net8.0-windows"
+          if (!(Test-Path "$mcpOutputDir/ScreenShotNet.Mcp.exe")) {
+            throw "MCP build output not found at $mcpOutputDir"
+          }
+
+          $skillsSourceDir = "skills"
+          if (!(Test-Path "$skillsSourceDir/ScreenShotNet/SKILL.md")) {
+            throw "Skills content not found at $skillsSourceDir"
+          }
+
+          $cliStageDir = Join-Path $env:RUNNER_TEMP "ScreenShotNet-net48"
+          $mcpStageDir = Join-Path $env:RUNNER_TEMP "ScreenShotNet.Mcp-net8.0-windows"
+          Remove-Item -Recurse -Force $cliStageDir -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $mcpStageDir -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $cliStageDir | Out-Null
+          New-Item -ItemType Directory -Path $mcpStageDir | Out-Null
+
+          Copy-Item -Path "$cliOutputDir/*" -Destination $cliStageDir -Recurse
+          Copy-Item -Path "$mcpOutputDir/*" -Destination $mcpStageDir -Recurse
+          Copy-Item -Path $skillsSourceDir -Destination $mcpStageDir -Recurse
+
+          Compress-Archive -Path "$cliStageDir/*" -DestinationPath $cliZipName -Force
+          Compress-Archive -Path "$mcpStageDir/*" -DestinationPath $mcpZipName -Force
+
+          "cli_zip_name=$cliZipName" >> $env:GITHUB_OUTPUT
+          "mcp_zip_name=$mcpZipName" >> $env:GITHUB_OUTPUT
 
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-zip
-          path: ${{ steps.package.outputs.zip_name }}
+          name: release-zips
+          path: |
+            ${{ steps.package.outputs.cli_zip_name }}
+            ${{ steps.package.outputs.mcp_zip_name }}
           if-no-files-found: error
 
   publish_release:
-    needs: [validate, build_net48_zip]
+    needs: [validate, build_release_zips]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -78,7 +110,7 @@ jobs:
       - name: Download zip artifact
         uses: actions/download-artifact@v8
         with:
-          name: release-zip
+          name: release-zips
           path: ./release-artifacts
 
       - name: Extract changelog section
@@ -130,5 +162,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Version: ${{ needs.validate.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- Tag: ${{ needs.validate.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Asset: ${{ needs.build_net48_zip.outputs.zip_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- CLI Asset: ${{ needs.build_release_zips.outputs.cli_zip_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- MCP Asset: ${{ needs.build_release_zips.outputs.mcp_zip_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
