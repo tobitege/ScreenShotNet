@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Globalization;
 
@@ -55,7 +55,7 @@ namespace ScreenShotNet
 
                         if (!TryParseRegion(regionValue, out var region))
                         {
-                            errorMessage = "Invalid region. Expected format: x,y,width,height with width/height > 0.";
+                            errorMessage = "Invalid region. Expected x,y,width,height with positive dimensions, at most 64 million pixels, and no coordinate overflow.";
                             return false;
                         }
 
@@ -70,9 +70,9 @@ namespace ScreenShotNet
                             return false;
                         }
 
-                        if (!double.TryParse(delayValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var delaySeconds) || delaySeconds < 0)
+                        if (!double.TryParse(delayValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var delaySeconds) || !ScreenshotOperations.IsValidDelay(delaySeconds))
                         {
-                            errorMessage = "Invalid delay. Provide a non-negative number in seconds.";
+                            errorMessage = "Invalid delay. Provide a finite number from 0 to 2147483.647 seconds.";
                             return false;
                         }
 
@@ -170,9 +170,9 @@ namespace ScreenShotNet
                             return false;
                         }
 
-                        if (!float.TryParse(watermarkSizeValue, NumberStyles.Float, CultureInfo.InvariantCulture, out watermarkSize) || watermarkSize <= 0)
+                        if (!float.TryParse(watermarkSizeValue, NumberStyles.Float, CultureInfo.InvariantCulture, out watermarkSize) || !ScreenshotOperations.IsValidWatermarkSize(watermarkSize))
                         {
-                            errorMessage = "Invalid watermark size. Provide a number greater than 0.";
+                            errorMessage = "Invalid watermark size. Provide a finite number greater than 0.";
                             return false;
                         }
 
@@ -261,12 +261,13 @@ namespace ScreenShotNet
                 return false;
             }
 
-            if (width <= 0 || height <= 0)
+            var parsedRegion = new Rectangle(x, y, width, height);
+            if (!ScreenCaptureService.IsValidRegion(parsedRegion))
             {
                 return false;
             }
 
-            region = new Rectangle(x, y, width, height);
+            region = parsedRegion;
             return true;
         }
 
@@ -357,7 +358,7 @@ namespace ScreenShotNet
 
         private static bool IsOptionToken(string value)
         {
-            switch (value)
+            switch (value?.ToLowerInvariant())
             {
                 case "--help":
                 case "-h":

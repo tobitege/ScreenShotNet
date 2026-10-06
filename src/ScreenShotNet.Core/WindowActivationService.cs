@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -15,6 +15,8 @@ namespace ScreenShotNet
         private const uint SwpNosize = 0x0001;
         private const uint SwpNomove = 0x0002;
         private const uint SwpShowwindow = 0x0040;
+        private const int GwlExStyle = -20;
+        private const int WsExTopmost = 0x00000008;
         private static readonly IntPtr HwndTopmost = new IntPtr(-1);
         private static readonly IntPtr HwndNotopmost = new IntPtr(-2);
 
@@ -94,6 +96,7 @@ namespace ScreenShotNet
             }
 
             var targetWindow = windowMatch.Handle;
+            var wasTopmost = (GetWindowLongW(targetWindow, GwlExStyle) & WsExTopmost) != 0;
             var foregroundWindow = GetForegroundWindow();
             var currentThreadId = GetCurrentThreadId();
             uint ignoredProcessId;
@@ -124,7 +127,7 @@ namespace ScreenShotNet
                 }
 
                 SetWindowPos(targetWindow, HwndTopmost, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpShowwindow);
-                SetWindowPos(targetWindow, HwndNotopmost, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpShowwindow);
+                SetWindowPos(targetWindow, wasTopmost ? HwndTopmost : HwndNotopmost, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpShowwindow);
 
                 for (var attempt = 0; attempt < 10; attempt++)
                 {
@@ -286,6 +289,9 @@ namespace ScreenShotNet
 
         [DllImport("user32.dll")]
         private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowLongW(IntPtr hWnd, int nIndex);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowTextW(IntPtr hWnd, StringBuilder lpString, int nMaxCount);

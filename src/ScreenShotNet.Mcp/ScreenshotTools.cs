@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Drawing;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol;
@@ -15,9 +15,9 @@ public static class ScreenshotTools
     public static IEnumerable<AIContent> CaptureScreenshot(
         [Description("Left edge of the capture region in screen pixels.")] int x,
         [Description("Top edge of the capture region in screen pixels.")] int y,
-        [Description("Capture width in pixels. Must be greater than 0.")] int width,
+        [Description("Capture width in pixels. Width and height must be positive, with at most 64 million pixels in total.")] int width,
         [Description("Capture height in pixels. Must be greater than 0.")] int height,
-        [Description("Optional delay before capture in seconds.")] double delaySeconds = 0,
+        [Description("Optional finite delay before capture, from 0 to 2147483.647 seconds.")] double delaySeconds = 0,
         [Description("Optional window title prefix. If provided, the first visible top-level window whose title starts with this value is restored and brought to the foreground before capture.")] string? windowTitle = null,
         [Description("Optional offset mode for x and y. Supported values: absolute, relative. Defaults to relative when windowTitle is set, otherwise absolute. Relative offsets require windowTitle and are measured from the matched window's top-left corner.")] string? captureOffsetMode = null,
         [Description("If true, mark the mouse cursor location at capture time as a red reticle on the returned image.")] bool withCursor = false,
@@ -27,11 +27,12 @@ public static class ScreenshotTools
         [Description("Optional watermark text to draw onto the screenshot before returning it.")] string? watermarkText = null,
         [Description("Watermark X position in capture-local pixels. Required when watermarkText is set.")] int? watermarkX = null,
         [Description("Watermark Y position in capture-local pixels. Required when watermarkText is set.")] int? watermarkY = null,
-        [Description("Optional watermark font size in points. Defaults to 24.")] float? watermarkSize = null,
+        [Description("Optional finite watermark font size in points. Must be greater than zero. Defaults to 24.")] float? watermarkSize = null,
         [Description("Optional watermark color as #RRGGBB, #AARRGGBB, or a known color name. Defaults to #80FFFFFF.")] string? watermarkColor = null)
     {
         ValidateRegionCaptureArguments(width, height, delaySeconds, format, out var normalizedFormat);
         var resolvedCaptureOffsetMode = ResolveCaptureOffsetMode(captureOffsetMode, windowTitle);
+        var watermark = BuildWatermarkOptions(watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
 
         using var screenshot = ScreenshotOperations.CaptureScreenshot(
             new Rectangle(x, y, width, height),
@@ -46,13 +47,13 @@ public static class ScreenshotTools
             summary += $" Activated window prefix '{windowTitle}' using {resolvedCaptureOffsetMode.ToString().ToLowerInvariant()} offsets.";
         }
 
-        return FinalizeCapture(screenshot, normalizedFormat, summary, captureRegion, cursorScreenPosition, withCursor, savePath, copyToClipboard, watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
+        return FinalizeCapture(screenshot, normalizedFormat, summary, captureRegion, cursorScreenPosition, withCursor, savePath, copyToClipboard, watermark);
     }
 
     [McpServerTool(Name = "capture_window_screenshot"), Description("Capture the first visible top-level window whose title starts with the provided value and return the screenshot image directly.")]
     public static IEnumerable<AIContent> CaptureWindowScreenshot(
         [Description("Window title prefix. The first visible top-level window whose title starts with this value is restored and brought to the foreground before capture.")] string windowTitle,
-        [Description("Optional delay before capture in seconds.")] double delaySeconds = 0,
+        [Description("Optional finite delay before capture, from 0 to 2147483.647 seconds.")] double delaySeconds = 0,
         [Description("If true, mark the mouse cursor location at capture time as a red reticle on the returned image.")] bool withCursor = false,
         [Description("Optional output image format for the returned image and saved file. Supported values: png, jpg, bmp, gif, tiff.")] string format = "png",
         [Description("Optional file path to also save the screenshot to.")] string? savePath = null,
@@ -60,22 +61,23 @@ public static class ScreenshotTools
         [Description("Optional watermark text to draw onto the screenshot before returning it.")] string? watermarkText = null,
         [Description("Watermark X position in capture-local pixels. Required when watermarkText is set.")] int? watermarkX = null,
         [Description("Watermark Y position in capture-local pixels. Required when watermarkText is set.")] int? watermarkY = null,
-        [Description("Optional watermark font size in points. Defaults to 24.")] float? watermarkSize = null,
+        [Description("Optional finite watermark font size in points. Must be greater than zero. Defaults to 24.")] float? watermarkSize = null,
         [Description("Optional watermark color as #RRGGBB, #AARRGGBB, or a known color name. Defaults to #80FFFFFF.")] string? watermarkColor = null)
     {
         ValidateSharedCaptureArguments(delaySeconds, format, out var normalizedFormat);
+        var watermark = BuildWatermarkOptions(watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
 
         using var screenshot = ScreenshotOperations.CaptureWindowScreenshot(windowTitle, delaySeconds, out var matchedWindowTitle, out var captureRegion, out var cursorScreenPosition);
         var summary = $"Captured window '{matchedWindowTitle}' as {normalizedFormat}.";
-        return FinalizeCapture(screenshot, normalizedFormat, summary, captureRegion, cursorScreenPosition, withCursor, savePath, copyToClipboard, watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
+        return FinalizeCapture(screenshot, normalizedFormat, summary, captureRegion, cursorScreenPosition, withCursor, savePath, copyToClipboard, watermark);
     }
 
     [McpServerTool(Name = "capture_center_screenshot"), Description("Capture a centered rectangular region inside the first visible top-level window whose title starts with the provided value and return the screenshot image directly.")]
     public static IEnumerable<AIContent> CaptureCenterScreenshot(
         [Description("Window title prefix. The first visible top-level window whose title starts with this value is restored and brought to the foreground before capture.")] string windowTitle,
-        [Description("Capture width in pixels. Must be greater than 0 and fit within the matched window width.")] int width,
+        [Description("Capture width in pixels. Must fit within the matched window. Width and height must be positive, with at most 64 million pixels in total.")] int width,
         [Description("Capture height in pixels. Must be greater than 0 and fit within the matched window height.")] int height,
-        [Description("Optional delay before capture in seconds.")] double delaySeconds = 0,
+        [Description("Optional finite delay before capture, from 0 to 2147483.647 seconds.")] double delaySeconds = 0,
         [Description("If true, mark the mouse cursor location at capture time as a red reticle on the returned image.")] bool withCursor = false,
         [Description("Optional output image format for the returned image and saved file. Supported values: png, jpg, bmp, gif, tiff.")] string format = "png",
         [Description("Optional file path to also save the screenshot to.")] string? savePath = null,
@@ -83,14 +85,15 @@ public static class ScreenshotTools
         [Description("Optional watermark text to draw onto the screenshot before returning it.")] string? watermarkText = null,
         [Description("Watermark X position in capture-local pixels. Required when watermarkText is set.")] int? watermarkX = null,
         [Description("Watermark Y position in capture-local pixels. Required when watermarkText is set.")] int? watermarkY = null,
-        [Description("Optional watermark font size in points. Defaults to 24.")] float? watermarkSize = null,
+        [Description("Optional finite watermark font size in points. Must be greater than zero. Defaults to 24.")] float? watermarkSize = null,
         [Description("Optional watermark color as #RRGGBB, #AARRGGBB, or a known color name. Defaults to #80FFFFFF.")] string? watermarkColor = null)
     {
         ValidateRegionCaptureArguments(width, height, delaySeconds, format, out var normalizedFormat);
+        var watermark = BuildWatermarkOptions(watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
 
         using var screenshot = ScreenshotOperations.CaptureCenteredWindowScreenshot(windowTitle, width, height, delaySeconds, out var matchedWindowTitle, out var captureRegion, out var cursorScreenPosition);
         var summary = $"Captured centered {width}x{height} region in window '{matchedWindowTitle}' at {captureRegion.X},{captureRegion.Y} as {normalizedFormat}.";
-        return FinalizeCapture(screenshot, normalizedFormat, summary, captureRegion, cursorScreenPosition, withCursor, savePath, copyToClipboard, watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
+        return FinalizeCapture(screenshot, normalizedFormat, summary, captureRegion, cursorScreenPosition, withCursor, savePath, copyToClipboard, watermark);
     }
 
     private static WatermarkOptions? BuildWatermarkOptions(string? watermarkText, int? watermarkX, int? watermarkY, float? watermarkSize, string? watermarkColor)
@@ -119,9 +122,9 @@ public static class ScreenshotTools
             throw new ArgumentException("Invalid watermark color. Use #RRGGBB, #AARRGGBB, or a known color name.", nameof(watermarkColor));
         }
 
-        if (watermarkSize.HasValue && watermarkSize.Value <= 0)
+        if (watermarkSize.HasValue && !ScreenshotOperations.IsValidWatermarkSize(watermarkSize.Value))
         {
-            throw new ArgumentOutOfRangeException(nameof(watermarkSize), "Watermark size must be greater than zero.");
+            throw new ArgumentOutOfRangeException(nameof(watermarkSize), "Watermark size must be finite and greater than zero.");
         }
 
         return new WatermarkOptions
@@ -136,9 +139,9 @@ public static class ScreenshotTools
 
     private static void ValidateRegionCaptureArguments(int width, int height, double delaySeconds, string format, out string normalizedFormat)
     {
-        if (width <= 0 || height <= 0)
+        if (!ScreenCaptureService.IsValidRegion(new Rectangle(0, 0, width, height)))
         {
-            throw new ArgumentOutOfRangeException(nameof(width), "Width and height must be greater than zero.");
+            throw new ArgumentOutOfRangeException(nameof(width), "Width and height must be positive and contain at most 64 million pixels.");
         }
 
         ValidateSharedCaptureArguments(delaySeconds, format, out normalizedFormat);
@@ -146,9 +149,9 @@ public static class ScreenshotTools
 
     private static void ValidateSharedCaptureArguments(double delaySeconds, string format, out string normalizedFormat)
     {
-        if (delaySeconds < 0)
+        if (!ScreenshotOperations.IsValidDelay(delaySeconds))
         {
-            throw new ArgumentOutOfRangeException(nameof(delaySeconds), "Delay must be zero or greater.");
+            throw new ArgumentOutOfRangeException(nameof(delaySeconds), "Delay must be a finite number from 0 to 2147483.647 seconds.");
         }
 
         if (!ScreenshotOperations.TryNormalizeOutputFormat(format, out normalizedFormat))
@@ -191,13 +194,8 @@ public static class ScreenshotTools
         bool withCursor,
         string? savePath,
         bool copyToClipboard,
-        string? watermarkText,
-        int? watermarkX,
-        int? watermarkY,
-        float? watermarkSize,
-        string? watermarkColor)
+        WatermarkOptions? watermark)
     {
-        var watermark = BuildWatermarkOptions(watermarkText, watermarkX, watermarkY, watermarkSize, watermarkColor);
         if (watermark != null)
         {
             ScreenshotOperations.ApplyWatermark(screenshot, watermark);

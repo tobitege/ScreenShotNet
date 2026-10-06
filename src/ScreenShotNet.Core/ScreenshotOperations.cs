@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -17,6 +18,26 @@ namespace ScreenShotNet
         private const int CursorReticleRadius = 10;
         private const int CursorReticleGap = 4;
         private const int CursorReticleLineLength = 8;
+
+        public static bool IsValidDelay(double delaySeconds)
+        {
+            return !double.IsNaN(delaySeconds) && !double.IsInfinity(delaySeconds) &&
+                   delaySeconds >= 0 && delaySeconds <= int.MaxValue / 1000d;
+        }
+
+        public static bool IsValidWatermarkSize(float size)
+        {
+            return !float.IsNaN(size) && !float.IsInfinity(size) && size > 0;
+        }
+
+        private static void ValidateDelay(double delaySeconds)
+        {
+            if (!IsValidDelay(delaySeconds))
+            {
+                throw new ArgumentOutOfRangeException(nameof(delaySeconds),
+                    "Delay must be a finite number from 0 to 2147483.647 seconds.");
+            }
+        }
 
         public static Bitmap CaptureScreenshot(Rectangle region, double delaySeconds)
         {
@@ -37,11 +58,14 @@ namespace ScreenShotNet
 
         public static Bitmap CaptureScreenshot(Rectangle region, double delaySeconds, string windowTitle, bool useRelativeToWindow, out Rectangle captureRegion, out Point cursorScreenPosition)
         {
+            ValidateDelay(delaySeconds);
+            ScreenCaptureService.ValidateRegion(region);
             var effectiveRegion = region;
+            WindowMatch windowMatch = null;
 
             if (!string.IsNullOrWhiteSpace(windowTitle))
             {
-                if (!WindowActivationService.TryFindWindowByTitlePrefix(windowTitle, out var windowMatch, out var windowError))
+                if (!WindowActivationService.TryFindWindowByTitlePrefix(windowTitle, out windowMatch, out var windowError))
                 {
                     throw new InvalidOperationException(windowError);
                 }
@@ -49,20 +73,6 @@ namespace ScreenShotNet
                 if (!WindowActivationService.TryBringWindowToForeground(windowMatch, out windowError))
                 {
                     throw new InvalidOperationException(windowError);
-                }
-
-                if (useRelativeToWindow)
-                {
-                    if (!WindowActivationService.TryGetWindowBounds(windowMatch, out var windowBounds, out windowError))
-                    {
-                        throw new InvalidOperationException(windowError);
-                    }
-
-                    effectiveRegion = new Rectangle(
-                        windowBounds.Left + region.X,
-                        windowBounds.Top + region.Y,
-                        region.Width,
-                        region.Height);
                 }
             }
             else if (useRelativeToWindow)
@@ -75,8 +85,32 @@ namespace ScreenShotNet
                 Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
             }
 
+            if (useRelativeToWindow)
+            {
+                if (!WindowActivationService.TryGetWindowBounds(windowMatch, out var windowBounds, out var windowError))
+                {
+                    throw new InvalidOperationException(windowError);
+                }
+
+                effectiveRegion = ResolveRelativeRegion(region, windowBounds);
+            }
+
             captureRegion = effectiveRegion;
             return ScreenCaptureService.CaptureRegion(effectiveRegion, out cursorScreenPosition);
+        }
+
+        internal static Rectangle ResolveRelativeRegion(Rectangle region, Rectangle windowBounds)
+        {
+            var x = (long)windowBounds.Left + region.X;
+            var y = (long)windowBounds.Top + region.Y;
+            if (x < int.MinValue || x > int.MaxValue || y < int.MinValue || y > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(region), "Relative capture coordinates overflow screen coordinates.");
+            }
+
+            var resolved = new Rectangle((int)x, (int)y, region.Width, region.Height);
+            ScreenCaptureService.ValidateRegion(resolved);
+            return resolved;
         }
 
         public static Bitmap CaptureWindowScreenshot(string windowTitle, double delaySeconds, out string matchedWindowTitle)
@@ -96,10 +130,7 @@ namespace ScreenShotNet
             matchedWindowTitle = null;
             captureRegion = Rectangle.Empty;
 
-            if (delaySeconds < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(delaySeconds), "Delay must be zero or greater.");
-            }
+            ValidateDelay(delaySeconds);
 
             if (!WindowActivationService.TryFindWindowByTitlePrefix(windowTitle, out var windowMatch, out var windowError))
             {
@@ -151,10 +182,8 @@ namespace ScreenShotNet
                 throw new ArgumentOutOfRangeException(nameof(height), "Height must be greater than zero.");
             }
 
-            if (delaySeconds < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(delaySeconds), "Delay must be zero or greater.");
-            }
+            ValidateDelay(delaySeconds);
+            ScreenCaptureService.ValidateRegion(new Rectangle(0, 0, width, height));
 
             if (!WindowActivationService.TryFindWindowByTitlePrefix(windowTitle, out var windowMatch, out var windowError))
             {
@@ -292,6 +321,55 @@ namespace ScreenShotNet
 
         public static bool TrySetClipboardImageWithRetry(Image screenshot, int maxAttempts, int delayMilliseconds, out string errorMessage)
         {
+            return TrySetClipboardWithRetry(() =>
+            {
+                if (screenshot == null)
+                {
+                    throw new ArgumentNullException(nameof(screenshot));
+                }
+
+                // Validate the image before Clipboard.SetImage can clear the clipboard.
+                _ = screenshot.Width;
+                Clipboard.SetImage(screenshot);
+            }, maxAttempts, delayMilliseconds, out errorMessage);
+        }
+
+        internal static bool TrySetClipboardWithRetry(Action setClipboard, int maxAttempts, int delayMilliseconds, out string errorMessage)
+        {
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            {
+                return TrySetClipboardOnStaThread(setClipboard, maxAttempts, delayMilliseconds, out errorMessage);
+            }
+
+            bool success = false;
+            string workerError = null;
+            Exception failure = null;
+            var worker = new Thread(() =>
+            {
+                try
+                {
+                    success = TrySetClipboardOnStaThread(setClipboard, maxAttempts, delayMilliseconds, out workerError);
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+            }) { IsBackground = true };
+            worker.SetApartmentState(ApartmentState.STA);
+            worker.Start();
+            worker.Join();
+
+            if (failure != null)
+            {
+                ExceptionDispatchInfo.Capture(failure).Throw();
+            }
+
+            errorMessage = workerError;
+            return success;
+        }
+
+        private static bool TrySetClipboardOnStaThread(Action setClipboard, int maxAttempts, int delayMilliseconds, out string errorMessage)
+        {
             errorMessage = null;
             var attempts = Math.Max(1, maxAttempts);
 
@@ -299,7 +377,7 @@ namespace ScreenShotNet
             {
                 try
                 {
-                    Clipboard.SetImage(screenshot);
+                    setClipboard();
                     return true;
                 }
                 catch (ExternalException ex)
@@ -328,6 +406,11 @@ namespace ScreenShotNet
 
         public static void ApplyWatermark(Bitmap screenshot, WatermarkOptions watermark)
         {
+            if (!IsValidWatermarkSize(watermark.Size))
+            {
+                throw new ArgumentOutOfRangeException(nameof(watermark), "Watermark size must be finite and greater than zero.");
+            }
+
             using var graphics = Graphics.FromImage(screenshot);
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;

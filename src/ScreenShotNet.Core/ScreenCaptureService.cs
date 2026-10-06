@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Runtime.InteropServices;
@@ -10,6 +10,25 @@ namespace ScreenShotNet
 {
     public static class ScreenCaptureService
     {
+        public const int MaxCapturePixels = 64_000_000;
+
+        public static bool IsValidRegion(Rectangle region)
+        {
+            return region.Width > 0 && region.Height > 0 &&
+                   (long)region.Width * region.Height <= MaxCapturePixels &&
+                   (long)region.X + region.Width <= int.MaxValue &&
+                   (long)region.Y + region.Height <= int.MaxValue;
+        }
+
+        internal static void ValidateRegion(Rectangle region)
+        {
+            if (!IsValidRegion(region))
+            {
+                throw new ArgumentOutOfRangeException(nameof(region),
+                    "Capture region must have positive dimensions, at most 64 million pixels, and no coordinate overflow.");
+            }
+        }
+
         public static Bitmap CaptureRegion(Rectangle region)
         {
             Point ignoredCursorPosition;
@@ -18,10 +37,7 @@ namespace ScreenShotNet
 
         public static Bitmap CaptureRegion(Rectangle region, out Point cursorScreenPosition)
         {
-            if (region.Width <= 0 || region.Height <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(region), "Capture region width and height must be greater than zero.");
-            }
+            ValidateRegion(region);
 
             if (!TryGetCursorPosition(out cursorScreenPosition))
             {
@@ -41,8 +57,7 @@ namespace ScreenShotNet
                 }
             }
 
-            using var image = Image.FromHbitmap(bitmapHandle.DangerousGetHandle());
-            return new Bitmap(image);
+            return Image.FromHbitmap(bitmapHandle.DangerousGetHandle());
         }
 
         private static bool TryGetCursorPosition(out Point cursorScreenPosition)

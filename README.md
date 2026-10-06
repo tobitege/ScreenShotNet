@@ -136,6 +136,8 @@ Example MCP call for a centered crop:
 Notes:
 
 - The server is Windows-only because it captures the live desktop.
+- A capture can contain at most 64 million pixels. Coordinates must not overflow a 32-bit signed integer.
+- Delays must be finite and between 0 and 2147483.647 seconds. Watermark sizes must be finite and greater than zero.
 - It should run in an interactive user session where the desktop is available.
 - `withCursor` is currently an MCP parameter and not a CLI switch.
 - `withCursor` is DPI-aware and tuned for multi-monitor desktop coordinates.
@@ -187,6 +189,19 @@ Examples:
 - 3: runtime capture/output failure
 
 ## Building
+
+Run the MCP smoke test after building the MCP project:
+
+```powershell
+dotnet build .\src\ScreenShotNet.Mcp\ScreenShotNet.Mcp.csproj -c Release
+.\scripts\test_mcp.ps1 -Configuration Release
+.\scripts\test_mcp.ps1 -Configuration Release -ProtocolVersion 2025-11-25
+```
+
+The default test uses MCP 2026-07-28 discovery and per-request metadata. It also checks rejection of unsupported protocol versions.
+The second command tests the earlier 2025-11-25 initialization handshake.
+Both modes check tool discovery, a real screenshot response, oversized capture rejection, and server shutdown.
+Complete responses and server diagnostics are saved to `buildlog.mcp-smoke-<protocol>.log`.
 
 - Default CLI build target is net48 for maximum compatibility.
 - Enable modern targets (net9.0-windows, net10.0-windows, net11.0-windows) with:

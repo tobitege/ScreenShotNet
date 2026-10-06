@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `Vanara.PInvoke.Gdi32` and `Vanara.PInvoke.User32` to 5.0.7.
 - Updated `Microsoft.Extensions.Hosting` to 10.0.12, `ModelContextProtocol` to 2.2.0, and `MSTest` to 4.4.1.
 - Updated and pinned GitHub Actions to releases published at least seven days before the update: `checkout` v7.0.1, `setup-dotnet` v6.0.0, `upload-artifact` v7.0.1, `download-artifact` v8.0.1, and `action-gh-release` v3.0.3.
+- Reduced capture memory use by removing an unnecessary bitmap copy.
+- Added MCP builds and stdio smoke tests for protocol revisions `2026-07-28` and `2025-11-25` to CI.
+
+### Fixed
+
+- Run clipboard writes on an STA thread when called from MTA threads.
+- Preserve a window's topmost state when activating it.
+- Resolve window-relative capture coordinates after the requested delay.
+- Reject coordinate overflows, captures larger than 64 million pixels, non-finite delays, and non-finite watermark sizes.
+- Recognize option names consistently regardless of letter case.
+- Validate MCP watermark arguments before capturing the screen.
 
 ## [1.1.1] - 2026-08-09
 
