@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
     <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
     <AssemblyName>ScreenShotNet.Core</AssemblyName>
@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Vanara.PInvoke.Gdi32" Version="5.0.1" />
-    <PackageReference Include="Vanara.PInvoke.User32" Version="5.0.1" />
+    <PackageReference Include="Vanara.PInvoke.Gdi32" Version="5.0.7" />
+    <PackageReference Include="Vanara.PInvoke.User32" Version="5.0.7" />
   </ItemGroup>
 </Project>

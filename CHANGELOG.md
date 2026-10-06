@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-10-06
+
+### Changed
+
+- Updated `Vanara.PInvoke.Gdi32` and `Vanara.PInvoke.User32` to 5.0.7.
+- Updated `Microsoft.Extensions.Hosting` to 10.0.12, `ModelContextProtocol` to 2.2.0, and `MSTest` to 4.4.1.
+- Updated and pinned GitHub Actions to releases published at least seven days before the update: `checkout` v7.0.1, `setup-dotnet` v6.0.0, `upload-artifact` v7.0.1, `download-artifact` v8.0.1, and `action-gh-release` v3.0.3.
+
 ## [1.1.1] - 2026-08-09
 
 ### Fixed

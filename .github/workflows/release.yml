@@ -37,9 +37,9 @@ jobs:
       cli_zip_name: ${{ steps.package.outputs.cli_zip_name }}
       mcp_zip_name: ${{ steps.package.outputs.mcp_zip_name }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: "8.0.x"
 
@@ -90,7 +90,7 @@ jobs:
           "mcp_zip_name=$mcpZipName" >> $env:GITHUB_OUTPUT
 
       - name: Upload zip artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: release-zips
           path: |
@@ -105,10 +105,10 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - name: Download zip artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.1
         with:
           name: release-zips
           path: ./release-artifacts
@@ -146,7 +146,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
           name: "v${{ needs.validate.outputs.version }}"

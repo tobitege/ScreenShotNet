@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -19,7 +19,7 @@ builder.Services
         options.ServerInfo = new Implementation
         {
             Name = "screenshot-net",
-            Version = "1.1.1",
+            Version = "1.1.2",
             Title = "ScreenShotNet MCP",
             Description = "Captures Windows screen regions and returns screenshot image content directly."
         };
